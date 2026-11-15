@@ -1,5 +1,7 @@
 # 🐋 大肥鱼 · AstrBot QQ 机器人全家桶
 
+> **本 fork：伽拉忒亚。** 在参考项目之上部署伽拉忒亚：人设不同（[人设](persona/伽拉忒亚-人设.md)、[人格提示词](persona/伽拉忒亚-人格提示词.md)），长期记忆换成自建的 [dafeiyu-memory-system](https://github.com/MiameChyan/dafeiyu-memory-system)，跑团是她的一项功能，由 [dafeiyu-trpg](https://github.com/MiameChyan/dafeiyu-trpg) 提供。两个插件共用的基础库在 [`lib/dafeiyu-shared`](lib/dafeiyu-shared/)。部署见 [伽拉忒亚部署清单](docs/伽拉忒亚-部署清单.md)。以下为参考项目的原始说明。
+
 > 一只住在 QQ 里的蓝色鲸鱼娘：会看、会听、会说话、有记忆、会主动找你，
 > 还能进群和你的朋友打成一片，也会嘴硬地催你吃饭。基于 **AstrBot + NapCat + DeepSeek + 阿里云百炼** 搭建。
 

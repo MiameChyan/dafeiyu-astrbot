@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dafeiyu-shared"
+version = "0.0.1"
+description = "大肥鱼共享基础库：生成核查循环、日志、指标与回放"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "python-ulid>=3.0.0",
+    "zstandard>=0.23.0",
+    "tzdata>=2025.2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.25"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shared", "shared.agentloop", "shared.observability"]
+
+[tool.pytest.ini_options]
+testpaths = ["shared/tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]

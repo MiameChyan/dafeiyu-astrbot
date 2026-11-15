@@ -25,6 +25,8 @@
 | `deploy/memory_observatory/` | 小小房间、记忆星海、只读观测台 |
 | `tests/` | unittest 回归；多数插件测试通过 `tests/test_bili_activity.py` 的 fixtures 加载 |
 | `docs/` | 设计、部署、踩坑和验收记录 |
+| `lib/dafeiyu-shared/` | 伽拉忒亚：记忆系统与 TRPG 插件共用的 `shared.agentloop` / `shared.observability`，pytest 测试在 `shared/tests/` |
+| `persona/伽拉忒亚-*.md` | 伽拉忒亚人设与人格提示词；上游 `persona/大肥鱼-人格.md` 保留不动 |
 
 ## 3. 硬性不变量
 
