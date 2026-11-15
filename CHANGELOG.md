@@ -2,6 +2,13 @@
 
 > 每一次值得说的进化都会记在这里。
 
+## 未发布 · 伽拉忒亚：共享库、人设与部署清单（2026-11-15）
+
+- 新增 `lib/dafeiyu-shared/`：记忆系统与 TRPG 插件共用的基础库（`shared.agentloop` 生成→核查→修正循环，`shared.observability` 日志、指标、回放），附日志与观测规格；插件仓库以 `git+…#subdirectory=lib/dafeiyu-shared` 固定提交引用。
+- 新增 `persona/伽拉忒亚-人设.md`、`persona/伽拉忒亚-人格提示词.md` 与立绘 `assets/character/伽拉忒亚-立绘.webp`；上游人格文件不动，部署套件暂仍组装上游人格。
+- 新增 `docs/伽拉忒亚-部署清单.md`：钉 AstrBot v4.29.0、核心补丁、`ignore_bot_self_message`、记忆与跑团插件的部署步骤。
+- 未改动任何既有插件、补丁与测试。
+
 ## 未发布 · 分泡：成对符号内不再拆泡（2026-11-10）
 
 - `chat_layout` 新增 `has_unclosed_pair` / `merge_unclosed_pairs`：分段器在成对符号（书名号《》、引号“”、括号（）、【】、[] 等）内部遇到问号/句号不再拆成两条消息；核心分段（`stage.py`）和主动消息分段（`proactive_chat/sender_service.py`）共用，`group_bubbles` 也加了一层兜底。
