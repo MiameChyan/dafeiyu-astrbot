@@ -28,6 +28,9 @@ services:
       - ../deploy/patches/stage.py:/AstrBot/astrbot/core/pipeline/result_decorate/stage.py:ro
       - ../deploy/patches/respond_stage.py:/AstrBot/astrbot/core/pipeline/respond/stage.py:ro
       - ../deploy/patches/chat_layout.py:/AstrBot/astrbot/core/pipeline/chat_layout.py:ro
+      # 拟人节奏：回复前按读消息/想/打字的时间等待，所有出站消息过全局限速
+      - ../deploy/patches/human_pacing.py:/AstrBot/astrbot/core/utils/human_pacing.py:ro
+      - ../deploy/patches/aiocqhttp_message_event.py:/AstrBot/astrbot/core/platform/sources/aiocqhttp/aiocqhttp_message_event.py:ro
     environment:
       - TZ=${TZ:-Asia/Shanghai}
 
