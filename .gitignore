@@ -15,3 +15,4 @@ lib/**/*.egg-info/
 lib/**/uv.lock
 deploy-windows/data/
 deploy-windows/napcat/
+deploy-windows/logs/

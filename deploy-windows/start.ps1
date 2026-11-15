@@ -3,7 +3,8 @@
 #   .\start.ps1            # 检查 docker → 建目录/.env → 构建镜像 → 起容器 → 等面板就绪
 #   .\start.ps1 -NoBuild   # 不重建镜像，只起容器（日常重启用这个）
 #   .\start.ps1 -Pull      # 构建前先拉 AstrBot 基础镜像
-param([switch]$NoBuild, [switch]$Pull)
+#   .\start.ps1 -NoWatchdog  # 不启动后台的 QQ 掉线监控（watchdog.py）
+param([switch]$NoBuild, [switch]$Pull, [switch]$NoWatchdog)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 
@@ -57,6 +58,26 @@ for ($i = 0; $i -lt 90; $i++) {
   try { Invoke-WebRequest "http://127.0.0.1:$astrPort/" -UseBasicParsing -TimeoutSec 3 | Out-Null; $ready = $true; break } catch { Start-Sleep 2 }
 }
 if (-not $ready) { docker compose logs --tail 40 astrbot; Die '面板 3 分钟没起来，data\ 已保留' }
+
+# 6. QQ 掉线 / 假在线监控：后台每 10 分钟查一次，异常时弹 Windows 通知，只通知不动手
+if (-not $NoWatchdog) {
+  $wdPidFile = Join-Path $PSScriptRoot 'logs\watchdog.pid'
+  $wdRunning = $false
+  if (Test-Path $wdPidFile) {
+    try {
+      $wdOld = [int](Get-Content $wdPidFile -Raw).Trim()
+      $wdProc = Get-CimInstance Win32_Process -Filter "ProcessId = $wdOld" -ErrorAction SilentlyContinue
+      if ($wdProc -and $wdProc.CommandLine -match 'watchdog\.py') { $wdRunning = $true }
+    } catch { }
+  }
+  $pyw = Get-Command pythonw -ErrorAction SilentlyContinue
+  if ($wdRunning) { Say "掉线监控已在运行（PID $wdOld）" }
+  elseif (-not $pyw) { Warn '没找到 pythonw，跳过掉线监控（装好 Python 后重跑 start.ps1）' }
+  else {
+    Start-Process -FilePath $pyw.Source -ArgumentList "`"$PSScriptRoot\watchdog.py`"" -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
+    Say '掉线监控已在后台启动（日志 logs\watchdog.log；手动查一次：python watchdog.py --once）'
+  }
+}
 
 Write-Host @"
 
