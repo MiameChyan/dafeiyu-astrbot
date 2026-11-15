@@ -13,3 +13,5 @@ deploy-macos/napcat/
 lib/**/build/
 lib/**/*.egg-info/
 lib/**/uv.lock
+deploy-windows/data/
+deploy-windows/napcat/

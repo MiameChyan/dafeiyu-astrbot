@@ -38,6 +38,7 @@ services:
 
   napcat:
     # 钉版：与 ../deploy/compose.yaml 相同的已验证组合（Docker 镜像发布滞后桌面端一版）
+    # ⚠️ NapCat 已停更，Docker Hub 拉不到此 tag；新部署见 docs/NapCat停更与镜像来源.md（v4.18.42 + docker load）
     image: mlikiowa/napcat-docker:v4.18.37
     restart: unless-stopped
     # 固定主机名：QQ 的设备名/指纹会带上 hostname，重建容器后不容易被当成「新设备」

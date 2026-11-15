@@ -70,6 +70,8 @@ python deploy-kit/preflight.py --env .env
 
 ## 第 5 步：装 NapCat（QQ 协议端，10 分钟）
 
+> ⚠️ NapCat 已于 2026-11-12 停更、官方下载全部下架。安装包从社区备份获取（v4.18.42），见 [NapCat 停更与镜像来源](docs/NapCat停更与镜像来源.md)；Windows 上更推荐用 Docker 套件 [`deploy-windows/`](deploy-windows/README.md)。
+
 1. 下载 `NapCat.Shell.Windows.Node.zip`（自带 Node）
 2. **Windows 首选自包含模式**：解压后双击**根目录 `napcat.bat`**（自带 `wrapper.node`，绕开新版 QQ 注入崩溃，见踩坑 #22；若走注入模式可用 `launcher-win10-user.bat`）
 3. 打开 WebUI `http://127.0.0.1:6099` → **用 QQ 小号扫码登录**
@@ -88,7 +90,7 @@ AstrBot 面板：平台适配器新增 **QQ(aiocqhttp)**，端口 **`6199`**，�
 
 | 位置 | 填什么 |
 |---|---|
-| 对话模型 | `deepseek-chat` + DeepSeek Key |
+| 对话模型 | `deepseek-flash` + DeepSeek Key（旧名 `deepseek-chat` 已不可用；建好提供商源后还要在源下添加模型并设为默认） |
 | 图片转述 | `qwen3-vl-plus` + 百炼 Key |
 | 语音（TTS，可选） | `qwen-audio-3.1-tts-flash` + 百炼 Key（自定义音色与两个源码补丁见 [docs/导入指南.md](docs/导入指南.md) 与踩坑 #15） |
 

@@ -24,6 +24,7 @@ services:
 
   napcat:
     # 钉版：已验证组合（桌面端 NapCat 4.18.38；Docker 镜像发布滞后一版，取 v4.18.37）
+    # ⚠️ NapCat 已停更，Docker Hub 拉不到此 tag；新部署见 docs/NapCat停更与镜像来源.md（v4.18.42 + docker load）
     image: mlikiowa/napcat-docker:v4.18.37
     container_name: napcat
     restart: unless-stopped

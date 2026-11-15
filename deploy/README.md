@@ -64,6 +64,8 @@ QQ 用户 ⇄ 腾讯服务器 ⇄ NapCat(Docker) ⇄ WebSocket(6199) ⇄ AstrBot
 
 - 本套件钉死已验证组合：**AstrBot `soulter/astrbot:v4.29.0`** +
   **NapCat 镜像 `mlikiowa/napcat-docker:v4.18.37`**（`Dockerfile` 与 `compose.yaml` 两处）。
+  ⚠️ NapCat 已于 2026-11-12 停更、Docker Hub 镜像下架，新部署拉不到 `v4.18.37`；改用社区备份的 v4.18.42 镜像包
+  （`docker load` 后把 tag 改成 `v4.18.42` 并加 `pull_policy: never`），见 [NapCat 停更与镜像来源](../docs/NapCat停更与镜像来源.md)。
   升级时：改两处 tag → `docker compose build && docker compose up -d` →
   **重新对照 `patches/` 的补丁在新版是否仍适用**（补丁是核心源码的修改版，版本不匹配行为会变）。
 - 只要"基础聊天"（不玩百炼语音 / 不挂 TTS 补丁）：删掉 compose 里两条 `patches/...` 的

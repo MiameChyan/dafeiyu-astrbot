@@ -1,0 +1,58 @@
+# 大肥鱼 · Windows 本机 Docker 套件（Docker Desktop + WSL2）
+#
+# 用法：powershell -ExecutionPolicy Bypass -File deploy-windows\start.ps1
+# 约定：宿主路径都相对本文件；端口 / 时区 / QQ 号走同目录 .env。
+# 依赖：镜像构建复用 ../deploy/Dockerfile，核心补丁复用 ../deploy/patches/（与 deploy-macos 相同做法）。
+name: dafeiyu-windows
+
+services:
+  astrbot:
+    build:
+      context: ../deploy
+      dockerfile: Dockerfile
+    image: dafeiyu-astrbot:windows
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ASTRBOT_PORT:-6185}:6185"     # AstrBot 面板
+      # 海豹 WebUI：海豹由骰子插件 astrbot_plugin_trpg_dice 在本容器内作为子进程托管
+      # （TRPG 规格 §9.1），首次要在它的 WebUI 里添加指向 127.0.0.1:18779 的 OneBot 账号。
+      # 骰子端点 18779 只在容器内部用，不映射。
+      - "127.0.0.1:${SEALDICE_PORT:-3211}:3211"
+    volumes:
+      # AstrBot 数据。TRPG 本地导入目录（modules_dir 默认 data/plugin_data/trpg/modules）
+      # 与海豹程序（sealdice_path 填 /AstrBot/data/sealdice/sealdice-core）都放在这里面。
+      - ./data:/AstrBot/data
+      # 核心补丁（AstrBot v4.29.0 源码修改版），只读 bind-mount，升级镜像不丢。
+      # 只要基础聊天时注释掉下面四行。TRPG / 记忆系统的 P-T1、P-M1 写好后照此追加。
+      - ../deploy/patches/dashscope_tts.py:/AstrBot/astrbot/core/provider/sources/dashscope_tts.py:ro
+      - ../deploy/patches/stage.py:/AstrBot/astrbot/core/pipeline/result_decorate/stage.py:ro
+      - ../deploy/patches/respond_stage.py:/AstrBot/astrbot/core/pipeline/respond/stage.py:ro
+      - ../deploy/patches/chat_layout.py:/AstrBot/astrbot/core/pipeline/chat_layout.py:ro
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+
+  napcat:
+    # NapCat 已于 2026-11-12 删库停更，Docker Hub 镜像下架。本镜像来自备份
+    # github.com/XingYunStar/NapCatQQ 的 v4.18.42 release（docker save 包），需先
+    #   docker load -i napcat-docker-v4.18.42-amd64.tar
+    # 已核验：NapCat.Shell.zip 与官方 tag 源码构建结果一致；QQ 层与腾讯官方
+    # linuxqq_3.2.34-53644 deb 逐文件一致（2026-11-15）。
+    image: mlikiowa/napcat-docker:v4.18.42
+    pull_policy: never
+    restart: unless-stopped
+    # 固定主机名：QQ 设备指纹会带上 hostname，重建容器后不容易被当成新设备
+    hostname: dafeiyu-napcat
+    ports:
+      - "127.0.0.1:${NAPCAT_PORT:-6099}:6099"     # NapCat WebUI（扫码登录）
+    volumes:
+      - ./napcat/config:/app/napcat/config
+      - ./napcat/qq:/app/.config/QQ
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      # 首次启动自动写好指向 AstrBot 的反向 WS（ws://astrbot:6199/ws），只在 onebot11.json 缺失时生效
+      - MODE=astrbot
+      # 快速登录：扫码成功过一次后，重启才免扫码
+      - ACCOUNT=${QQ_ACCOUNT:-}
+      - NAPCAT_QUICK_ACCOUNT=${QQ_ACCOUNT:-}
+      # 可选：固定 WebUI token（只在 webui.json 不存在时写入）
+      - WEBUI_TOKEN=${WEBUI_TOKEN:-}
