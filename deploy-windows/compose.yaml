@@ -18,6 +18,9 @@ services:
       # （TRPG 规格 §9.1），首次要在它的 WebUI 里添加指向 127.0.0.1:18779 的 OneBot 账号。
       # 骰子端点 18779 只在容器内部用，不映射。
       - "127.0.0.1:${SEALDICE_PORT:-3211}:3211"
+      # OneBot 反向 WS（aiocqhttp）。容器内的 NapCat 走内部网络不需要它；
+      # 在宿主机上跑的协议端（如 OpenQQ）连 ws://127.0.0.1:6199/ws。只绑本机。
+      - "127.0.0.1:${ONEBOT_WS_PORT:-6199}:6199"
     volumes:
       # AstrBot 数据。TRPG 本地导入目录（modules_dir 默认 data/plugin_data/trpg/modules）
       # 与海豹程序（sealdice_path 填 /AstrBot/data/sealdice/sealdice-core）都放在这里面。
