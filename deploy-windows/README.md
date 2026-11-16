@@ -64,6 +64,23 @@ docker compose logs -f astrbot     # 跟日志
 
 AstrBot 重启后 NapCat 会在 30 秒内自动重连（2026-11-15 实测）。连不回来时用 `python ..\deploy\heal_ws.py` 自愈。
 
+### 掉线 / 假在线监控
+
+小号被风控时，有时 NapCat 自己还显示「已登录」，但消息已经收不到了（假在线）。`start.ps1` 会在后台用 `pythonw` 拉起 [watchdog.py](watchdog.py)，`stop.ps1` 会先停掉它。它每 10 分钟检查一次：
+
+- **掉线**（60 秒后复查仍失败才算）：NapCat WebUI 连不上；显示未登录或已离线；OneBot `get_status` 离线；`nc_get_rkey` 向 QQ 服务器取数据失败。
+- **疑似假在线**：白天（默认北京时间 9–24 点）连续 3 小时一条消息都没收到。NapCat 刚重启不满 3 小时不判。
+
+状态变化时弹 Windows 通知，没恢复就每 2 小时提醒一次，恢复后再通知一次。**只通知，不重启任何东西**：身份失效时快速登录必然失败，反复重启只会更像机器人。日志在 `logs\watchdog.log`，QQ 号、群号等长数字都会打码。
+
+```powershell
+python watchdog.py --once          # 手动查一次
+python watchdog.py --test-notify   # 试一下通知能不能弹出
+.\start.ps1 -NoBuild -NoWatchdog   # 不要监控
+```
+
+阈值在 `.env` 里改：`WATCHDOG_INTERVAL_MIN`、`WATCHDOG_SILENCE_HOURS`、`WATCHDOG_ACTIVE_HOURS`。
+
 ## 验证状态（2026-11-15，Windows 11 + Docker Desktop 28.0.1）
 
 - ✅ AstrBot v4.29.0 构建与启动，四个核心补丁挂载到位
