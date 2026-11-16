@@ -76,18 +76,22 @@ docker compose logs astrbot | Select-String "Initial"
 
 ### 5. 改用宿主机上的 OpenQQ（可选，替代 NapCat）
 
-NapCat 小号接连被判「身份失效」后，2026-11-16 改用 [OpenQQ](https://github.com/feijx3/OpenQQ)（审查并锁定在 `14a7bac`）：
+NapCat 小号接连被判「身份失效」后，2026-11-16 改用 [OpenQQ](https://github.com/feijx3/OpenQQ)（审查过上游 `14a7bac`）。
+实际用的是我们的 fork [MiameChyan/OpenQQ](https://github.com/MiameChyan/OpenQQ) 的 `dafeiyu` 分支（锁定在 `246d7bc`），
+在上游基础上加了「收到图片时让 QQ 下载原图，并以 base64 内嵌」，否则容器里的 AstrBot 看不到图片。
 它在 **Windows 桌面版 QQ NT** 里挂接会话，和 NapCat / SnowLuma 同属「挂接官方客户端」，只是跑在真机桌面 QQ 上。
 代码全部开源、无预编译二进制、除本机外不连任何地址。
 
+- **获取**：`git clone -b dafeiyu https://github.com/MiameChyan/OpenQQ.git`，然后 `git checkout 246d7bc`。
 - **放在纯英文路径**（如 `D:\RAG-ai-code\OpenQQ`）：cmake 4.2 在含中文的路径上直接崩溃（`0xC0000409`）。
 - **构建**：`pip install ninja`（装了 g++ 时它强制用 Ninja）→ `npm ci` → `npm run build`。
 - **配置** `config/openqq.json`（不进版本控制）：`qqRoot` 填 QQ 安装目录；只开反向 WS
   `ws://127.0.0.1:6199/ws`，正向 WS 关掉。AstrBot 这边 compose 已把 6199 映射到 `127.0.0.1`。
 - **启动顺序**：先停掉 NapCat 容器 → **退出所有 QQ** → `node src/main.mjs start` → 在它拉起的 QQ 里扫码登录小号 →
   需要的话再另开 QQ 登录主号（另开的是独立进程，实测没有加载 OpenQQ 的 DLL）。重启 OpenQQ 前两个 QQ 都要退出。
-- **已知差异**：收到的图片只有文件名和 Windows 本机缓存路径，容器里的 AstrBot 读不到，她看不到图片和表情包
-  （只收到「对方发来一张图片或表情包」）；私聊事件不带昵称。掉线监控 `watchdog.py` 目前只认 NapCat。
+- **图片**：fork 里收到图片时先让 QQ 下载原图（最多等 10 秒），5 MB 以内以 `base64://` 交给 AstrBot。
+  实测 162 KB 的照片与消息同一秒到达，模型能看到图片；超时或超限时退回补全的下载地址（NT 新版图片多半 404）。
+- **已知差异**：私聊事件不带昵称。掉线监控 `watchdog.py` 目前只认 NapCat。
 
 ## 日常运维
 
