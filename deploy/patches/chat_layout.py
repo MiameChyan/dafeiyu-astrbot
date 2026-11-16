@@ -162,9 +162,17 @@ def group_bubbles(
             bubble_text = "".join(
                 getattr(c, "text", "") for c in current if isinstance(c, plain_type)
             )
+            # Two adjacent Plains come straight from the segmenter, which has
+            # already decided there is a boundary (e.g. a newline in a reply
+            # that skips end punctuation).  Only a Plain resumed after a Face
+            # needs the sentence-end heuristic.
+            directly_after_plain = isinstance(current[-1], plain_type)
             starts_new = (
                 previous_plain is not None
-                and text_ends_sentence(getattr(previous_plain, "text", ""))
+                and (
+                    directly_after_plain
+                    or text_ends_sentence(getattr(previous_plain, "text", ""))
+                )
                 and not has_unclosed_pair(bubble_text)
             )
             if starts_new and max_bubbles and text_bubble_count() >= max_bubbles:

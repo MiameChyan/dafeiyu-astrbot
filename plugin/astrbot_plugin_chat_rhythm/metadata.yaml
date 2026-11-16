@@ -1,0 +1,7 @@
+name: astrbot_plugin_chat_rhythm
+display_name: 大肥鱼的聊天节奏
+desc: 私聊连发合并（等对方说完、不在打字再一次回复）；纯表情包按概率不回
+version: v1.0.0
+author: dafeiyu-tools
+support_platforms:
+  - aiocqhttp
