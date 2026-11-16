@@ -22,9 +22,18 @@ services:
       # 在宿主机上跑的协议端（如 OpenQQ）连 ws://127.0.0.1:6199/ws。只绑本机。
       - "127.0.0.1:${ONEBOT_WS_PORT:-6199}:6199"
     volumes:
-      # AstrBot 数据。TRPG 本地导入目录（modules_dir 默认 data/plugin_data/trpg/modules）
-      # 与海豹程序（sealdice_path 填 /AstrBot/data/sealdice/sealdice-core）都放在这里面。
-      - ./data:/AstrBot/data
+      # AstrBot 数据放在 Docker 数据卷里，不放 Windows 目录：SQLite 的 WAL/共享内存
+      # 在 Docker Desktop 的 Windows 绑定挂载上不可靠。2026-11-16 实际出过事故：
+      # data_v4.db 突然写不进去（disk I/O error），对话历史停更，她因此答非所问。
+      # 数据卷由 migrate-data-volume.ps1 从旧的 .\data 迁移生成；external 保证卷不存在时
+      # compose 直接报错，不会悄悄起一个空白的新实例。
+      # TRPG 本地导入目录（modules_dir 默认 data/plugin_data/trpg/modules）与海豹程序
+      # （sealdice_path 填 /AstrBot/data/sealdice/sealdice-core）也都在卷里。
+      - astrbot-data:/AstrBot/data
+      # 插件代码与插件配置仍放在宿主机，方便直接改：它们不是 SQLite，绑定挂载没问题。
+      # 插件的数据库在 data/plugin_data，留在卷里。
+      - ./data/plugins:/AstrBot/data/plugins
+      - ./data/config:/AstrBot/data/config
       # 核心补丁（AstrBot v4.29.0 源码修改版），只读 bind-mount，升级镜像不丢。
       # 只要基础聊天时注释掉下面四行。TRPG / 记忆系统的 P-T1、P-M1 写好后照此追加。
       - ../deploy/patches/dashscope_tts.py:/AstrBot/astrbot/core/provider/sources/dashscope_tts.py:ro
@@ -43,6 +52,10 @@ services:
     #   docker load -i napcat-docker-v4.18.42-amd64.tar
     # 已核验：NapCat.Shell.zip 与官方 tag 源码构建结果一致；QQ 层与腾讯官方
     # linuxqq_3.2.34-53644 deb 逐文件一致（2026-11-15）。
+    # 2026-11-16 起协议端改用宿主机上的 OpenQQ。NapCat 登的是同一个小号，两边同时在线会互相顶号，
+    # 所以放进 napcat profile：普通的 up/start 不会再带上它。确实要用 NapCat 时：
+    #   docker compose --profile napcat up -d napcat
+    profiles: ["napcat"]
     image: mlikiowa/napcat-docker:v4.18.42
     pull_policy: never
     restart: unless-stopped
@@ -62,3 +75,8 @@ services:
       - NAPCAT_QUICK_ACCOUNT=${QQ_ACCOUNT:-}
       # 可选：固定 WebUI token（只在 webui.json 不存在时写入）
       - WEBUI_TOKEN=${WEBUI_TOKEN:-}
+
+volumes:
+  astrbot-data:
+    name: dafeiyu-astrbot-data
+    external: true

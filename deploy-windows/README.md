@@ -77,12 +77,12 @@ docker compose logs astrbot | Select-String "Initial"
 ### 5. 改用宿主机上的 OpenQQ（可选，替代 NapCat）
 
 NapCat 小号接连被判「身份失效」后，2026-11-16 改用 [OpenQQ](https://github.com/feijx3/OpenQQ)（审查过上游 `14a7bac`）。
-实际用的是我们的 fork [MiameChyan/OpenQQ](https://github.com/MiameChyan/OpenQQ) 的 `dafeiyu` 分支（锁定在 `1d73be9`），
-在上游基础上加了「收到图片时让 QQ 下载原图，并以 base64 内嵌」（否则容器里的 AstrBot 看不到图片）、「私聊消息补上发送者昵称」和「实现 `get_msg`」（AstrBot 解析引用回复要用）。
+实际用的是我们的 fork [MiameChyan/OpenQQ](https://github.com/MiameChyan/OpenQQ) 的 `dafeiyu` 分支（锁定在 `5f6d71a`），
+在上游基础上加了「收到图片时让 QQ 下载原图，并以 base64 内嵌」（否则容器里的 AstrBot 看不到图片）、「私聊消息补上发送者昵称」、「实现 `get_msg`」（AstrBot 解析引用回复要用）和「引用里的图片也下载原图并内嵌」。
 它在 **Windows 桌面版 QQ NT** 里挂接会话，和 NapCat / SnowLuma 同属「挂接官方客户端」，只是跑在真机桌面 QQ 上。
 代码全部开源、无预编译二进制、除本机外不连任何地址。
 
-- **获取**：`git clone -b dafeiyu https://github.com/MiameChyan/OpenQQ.git`，然后 `git checkout 1d73be9`。
+- **获取**：`git clone -b dafeiyu https://github.com/MiameChyan/OpenQQ.git`，然后 `git checkout 5f6d71a`。
 - **放在纯英文路径**（如 `D:\RAG-ai-code\OpenQQ`）：cmake 4.2 在含中文的路径上直接崩溃（`0xC0000409`）。
 - **构建**：`pip install ninja`（装了 g++ 时它强制用 Ninja）→ `npm ci` → `npm run build`。
 - **配置** `config/openqq.json`（不进版本控制）：`qqRoot` 填 QQ 安装目录；只开反向 WS
@@ -93,26 +93,30 @@ NapCat 小号接连被判「身份失效」后，2026-11-16 改用 [OpenQQ](http
   实测 162 KB 的照片与消息同一秒到达，模型能看到图片；超时或超限时退回补全的下载地址（NT 新版图片多半 404）。
 - **昵称**：上游私聊事件不带昵称；fork 从好友列表或 QQ 资料服务补上（缓存）。
 - **引用回复**：上游没有 `get_msg`，AstrBot 看不到被引用的那句；fork 用 QQ 随引用附带的被引用消息副本（`records`）回答，引用多久以前的消息都行；没有副本时再查本次运行的缓存和 QQ 本机历史。
+  被引用的消息里有图片时（`5f6d71a`），先下载被引用副本的原图，`get_msg` 返回时重新内嵌，模型才看得到引用里的图。
 - **@ 唤醒**：上游没有 `get_stranger_info`，被 @ 的人没设群名片时 AstrBot 会丢掉整个 @ 段，@ 她不会被唤醒；fork 已实现。
 - **掉线监控**：`.env` 里填 `OPENQQ_DIR`（OpenQQ 所在目录），`watchdog.py` 就会按 OpenQQ 的规则查（见下面「掉线 / 假在线监控」）。
-  改用 OpenQQ 后**别用 `start.ps1`**：它会把 NapCat 容器一起拉起来，NapCat 登的是同一个小号，会和 OpenQQ 互相顶号。
-  改为 `docker compose up -d astrbot` 起 AstrBot，监控用 `Start-Process pythonw watchdog.py -WindowStyle Hidden` 单独起（`stop.ps1` 照样能停）。
+- **日常启停**：用仓库根目录的 `启动大肥鱼.ps1` / `安全关闭大肥鱼.ps1`（说明见 [日常启停.md](日常启停.md)）。
+  启动脚本会起 AstrBot、在新窗口拉起 OpenQQ 并等登录完成、确认连上 6199，再开监控；NapCat 在跑会先停掉，避免两边顶号。
+  NapCat 已放进 compose 的 `napcat` profile，普通的 `up` / `start` 不会再带上它。
 
 ## 日常运维
 
 ```powershell
-.\start.ps1 -NoBuild               # 日常重启，不重建镜像
-.\stop.ps1                         # 停容器，数据保留
-.\stop.ps1 -Down                   # 删容器与网络，数据保留
-docker compose restart napcat      # 只重启 NapCat（别用 up -d 重建：设备指纹会变，容易触发风控）
+..\启动大肥鱼.ps1                   # 日常启动：AstrBot + OpenQQ + 掉线监控
+..\安全关闭大肥鱼.ps1               # 安全关闭：等 AstrBot 正常退出；OpenQQ 保持登录
+.\start.ps1 -NoBuild               # 首次部署 / 重建后起容器
 docker compose logs -f astrbot     # 跟日志
 ```
+
+**数据在 Docker 数据卷 `dafeiyu-astrbot-data` 里**，不在 `.\data`（2026-11-16 起，原因见 compose.yaml）。
+`.\data` 里只有 `plugins\`、`config\` 仍然挂进容器；聊天配置用 AstrBot 面板改。旧数据迁移用 `migrate-data-volume.ps1`，备份方法见 [日常启停.md](日常启停.md)。
 
 AstrBot 重启后 NapCat 会在 30 秒内自动重连（2026-11-15 实测）。连不回来时用 `python ..\deploy\heal_ws.py` 自愈。
 
 ### 掉线 / 假在线监控
 
-小号被风控时，有时 NapCat 自己还显示「已登录」，但消息已经收不到了（假在线）。`start.ps1` 会在后台用 `pythonw` 拉起 [watchdog.py](watchdog.py)，`stop.ps1` 会先停掉它。它每 10 分钟检查一次：
+小号被风控时，有时 NapCat 自己还显示「已登录」，但消息已经收不到了（假在线）。`启动大肥鱼.ps1`（以及首次部署的 `start.ps1`）会在后台用 `pythonw` 拉起 [watchdog.py](watchdog.py)，`安全关闭大肥鱼.ps1` / `stop.ps1` 会先停掉它；PID 记在 `logs\watchdog.pid`，启动脚本据此识别已在运行的监控，不会重复拉起。它每 10 分钟检查一次：
 
 - **查哪个协议端**：`.env` 的 `WATCHDOG_PROTOCOL`，默认 `auto`：OpenQQ 进程在跑就按 OpenQQ 查，否则 NapCat 容器在跑就按 NapCat 查，都没在跑直接报掉线。
 - **掉线**（60 秒后复查仍失败才算）：
