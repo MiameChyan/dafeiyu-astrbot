@@ -12,6 +12,10 @@ services:
       dockerfile: Dockerfile
     image: dafeiyu-astrbot:windows
     restart: unless-stopped
+    # AstrBot 在容器里是 PID 1，只接管了 SIGINT。Docker 默认发 SIGTERM，PID 1 不处理就会忽略，
+    # docker stop 只能等满超时后强杀（137）。改发 SIGINT，让它走自己的退出流程。
+    stop_signal: SIGINT
+    stop_grace_period: 60s
     ports:
       - "127.0.0.1:${ASTRBOT_PORT:-6185}:6185"     # AstrBot 面板
       # 海豹 WebUI：海豹由骰子插件 astrbot_plugin_trpg_dice 在本容器内作为子进程托管
