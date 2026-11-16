@@ -477,6 +477,15 @@ class WiringTests(unittest.TestCase):
             compose,
         )
 
+    def test_windows_compose_puts_memory_files_on_host(self):
+        """记忆文件（Markdown + git）放宿主机方便查看和修改；SQLite 库留在数据卷（不挂整个插件数据目录）。"""
+        compose = self.read("deploy-windows", "compose.yaml")
+        self.assertIn(
+            "${MEMORY_DIR:-./memory}:/AstrBot/data/plugin_data/astrbot_plugin_memory_core/memory", compose)
+        self.assertNotRegex(compose, r"(?m):/AstrBot/data/plugin_data/astrbot_plugin_memory_core(:ro)?\s*$")
+        self.assertIn("deploy-windows/memory/", self.read(".gitignore").splitlines())
+        self.assertIn("MEMORY_DIR=", self.read("deploy-windows", ".env.example"))
+
     def test_hooks_module_has_no_astrbot_dependency(self):
         src = self.read("deploy", "patches", "dafeiyu_hooks.py")
         self.assertIsNone(re.search(r"^\s*(from|import)\s+astrbot", src, re.M))

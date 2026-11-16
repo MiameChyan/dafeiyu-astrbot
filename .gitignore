@@ -16,3 +16,4 @@ lib/**/uv.lock
 deploy-windows/data/
 deploy-windows/napcat/
 deploy-windows/logs/
+deploy-windows/memory/

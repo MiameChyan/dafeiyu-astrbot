@@ -2,6 +2,21 @@
 
 > 每一次值得说的进化都会记在这里。
 
+## 未发布 · 记忆文件放到宿主机（2026-11-17）
+
+- `deploy-windows/compose.yaml`：记忆插件的记忆文件（Markdown + 独立 git 仓库）绑定挂载到宿主机 `${MEMORY_DIR:-./memory}`，可以直接打开、修改，用 git 查看她记住了什么。插件的 `events.db`、`index.db` 是 SQLite，仍留在数据卷里。
+- 9p 挂载收不到文件变动事件：容器里 watchdog 对宿主机和容器内的写入都没有反应。记忆插件发现目录在这类挂载上时会自动改用轮询（见私有仓库 dafeiyu-memory-system）。
+- `.env.example` 新增 `MEMORY_DIR`，`.gitignore` 忽略 `deploy-windows/memory/`。
+- 线上配置（不在仓库里，`cmd_config.json` 改前已备份）：
+  - 新增嵌入 Provider `ollama_bge-m3`，指向本机 Ollama（`http://host.docker.internal:11434/v1`，1024 维，不发送 dimensions 参数）；
+  - 记忆插件的 `embedding_provider_id` 设为它。记忆里的原话因此只在本机做嵌入，不发给云端。
+- 知识库继续使用 AstrBot 自带的知识库，记忆插件不再管理（记忆规格 v0.2.4 §11）。
+
+**验证**：
+- `tests/test_dafeiyu_hooks.py` 新增挂载检查，全量回归与 main 的失败集合一致。
+- 实机：在 Windows 上新建记忆文件约 5 秒后被索引，并自动提交 `mem(manual)`；删除后索引同步移除。
+- 嵌入已接上 Ollama，现有事件补上了向量。
+
 ## 未发布 · 记忆系统挂钩点：入站观察 + 出站捕获（2026-11-17）
 
 记忆插件（私有仓库 dafeiyu-memory-system 的 `astrbot_plugin_memory_core`）按规格 §16.1 约定了挂钩点接口，这里把核心侧补齐。没有插件注册回调时，这些补丁什么也不做。
