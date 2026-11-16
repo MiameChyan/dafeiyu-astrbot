@@ -57,6 +57,10 @@ docker compose logs astrbot | Select-String "Initial"
 - **分段回复**：`platform_settings.segmented_reply` 设 `enable: true`、`max_segments: 3`，
   `regex` 改成 `.*?[。？！?!~…\n]+|.+$`。人格 v0.3 句末大多不打标点、靠换行分条，默认正则只按句号切，
   会把两行话塞进同一个气泡。`rate_limit.count` 降到 `10`。
+- **连发合并 / 表情包不回**：把仓库里的 `plugin/astrbot_plugin_chat_rhythm/` 拷进 `data\plugins\`，然后重启 AstrBot。
+  它不在 deploy-kit 的默认插件清单里，要手动装。私聊里对方连发几条时，等 4 秒静默、并且对方不在打字（用 NapCat 的
+  「输入状态」通知判断），再一次回复；一直在打字最多等 15 秒。这一批全是表情包（不含普通照片）时，有 60% 的概率不回；连发几张时每多一张减半（2 张 30%，3 张 15%）。没回的表情包会在下一条消息前提一句，让她知道自己看到了。
+  以 `/`、`.`、`。` 开头的指令和群聊不受影响。参数在插件配置里改。
 - **表情包**：插件市场装「表情包小偷」（`nagatoquin33/astrbot_plugin_stealer`，审查过的是 v3.2.2 / `6a993b2`）。
   开 `steal_meme`；`vision_provider_id` 填对话模型（deepseek-flash 能看图）；保持 `audit_required`（偷来的图先在
   插件的「表情管理」里人工通过才入库）。JEV / TypeSafe 留空不开，否则对话片段会发到第三方。

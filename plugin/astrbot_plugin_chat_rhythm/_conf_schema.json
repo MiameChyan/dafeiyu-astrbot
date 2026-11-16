@@ -1,0 +1,10 @@
+{
+  "enable": {"type": "bool", "default": true, "description": "启用聊天节奏", "hint": "关闭后私聊每条消息都立即单独处理。"},
+  "quiet_seconds": {"type": "float", "default": 4.0, "description": "连发静默秒数", "hint": "对方最后一条消息后静默这么久、且不在打字，才开始回复。"},
+  "max_wait_seconds": {"type": "float", "default": 15.0, "description": "最长等待秒数", "hint": "从第一条消息算起，对方一直在打字也最多等这么久。"},
+  "typing_ttl_seconds": {"type": "float", "default": 7.0, "description": "打字状态有效期", "hint": "“正在输入”多久没刷新就当对方停了（QQ 大约 5 秒刷新一次）。"},
+  "stop_grace_seconds": {"type": "float", "default": 1.0, "description": "停止输入后的缓冲", "hint": "收到“停止输入”后再等一下，接住刚好发出的消息。"},
+  "sticker_skip_probability": {"type": "float", "default": 0.6, "description": "纯表情包不回的概率", "hint": "私聊里这一批只有表情包（不含普通照片）时，按这个概率直接不回；连发几张时每多一张减半。0 表示总是交给模型。"},
+  "skipped_note_ttl_seconds": {"type": "float", "default": 600, "description": "没回的表情包提醒时效", "hint": "没回的表情包，在这段时间内会在对方下一条消息前提一句，让她知道自己看到了；超过就不提。"},
+  "command_prefixes": {"type": "list", "items": {"type": "string"}, "default": ["/", ".", "。"], "description": "指令前缀", "hint": "以这些开头的消息不参与合并，立即处理（指令、骰子）。"}
+}
