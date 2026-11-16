@@ -35,7 +35,7 @@ services:
       - ./data/plugins:/AstrBot/data/plugins
       - ./data/config:/AstrBot/data/config
       # 核心补丁（AstrBot v4.29.0 源码修改版），只读 bind-mount，升级镜像不丢。
-      # 只要基础聊天时注释掉下面四行。TRPG / 记忆系统的 P-T1、P-M1 写好后照此追加。
+      # 只要基础聊天时注释掉下面四行。
       - ../deploy/patches/dashscope_tts.py:/AstrBot/astrbot/core/provider/sources/dashscope_tts.py:ro
       - ../deploy/patches/stage.py:/AstrBot/astrbot/core/pipeline/result_decorate/stage.py:ro
       - ../deploy/patches/respond_stage.py:/AstrBot/astrbot/core/pipeline/respond/stage.py:ro
@@ -43,6 +43,10 @@ services:
       # 拟人节奏：回复前按读消息/想/打字的时间等待，所有出站消息过全局限速
       - ../deploy/patches/human_pacing.py:/AstrBot/astrbot/core/utils/human_pacing.py:ro
       - ../deploy/patches/aiocqhttp_message_event.py:/AstrBot/astrbot/core/platform/sources/aiocqhttp/aiocqhttp_message_event.py:ro
+      # 挂钩点（记忆系统规格 §16.1）：注册表 + 入站观察（唤醒判定前）。出站捕获 P-M1
+      # 在上面的 aiocqhttp_message_event.py 里。没有插件注册回调时什么也不做。
+      - ../deploy/patches/dafeiyu_hooks.py:/AstrBot/astrbot/core/dafeiyu_hooks.py:ro
+      - ../deploy/patches/waking_check_stage.py:/AstrBot/astrbot/core/pipeline/waking_check/stage.py:ro
     environment:
       - TZ=${TZ:-Asia/Shanghai}
 

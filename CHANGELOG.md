@@ -2,6 +2,18 @@
 
 > 每一次值得说的进化都会记在这里。
 
+## 未发布 · 记忆系统挂钩点：入站观察 + 出站捕获（2026-11-17）
+
+记忆插件（私有仓库 dafeiyu-memory-system 的 `astrbot_plugin_memory_core`）按规格 §16.1 约定了挂钩点接口，这里把核心侧补齐。没有插件注册回调时，这些补丁什么也不做。
+
+- 新增 `deploy/patches/dafeiyu_hooks.py`，挂到 `astrbot/core/dafeiyu_hooks.py`。它是一张不依赖 AstrBot 的注册表：`send_origin` 记发送来源，默认 `self`；`register_inbound_observer` 注册入站观察；`register_outbound` 注册出站回调。回调抛出的异常一律吞掉并记日志，出站回调放到后台任务里跑，不拖慢发送。
+- `aiocqhttp_message_event.py`（P-M1）：`send_message` 发送成功后发出一次出站事件，带上整条消息链和发送来源；发送失败或消息为空时不发。流水线回复、按气泡发送、插件主动发送都走这里，所以主动聊天发出的话也能记下来。
+- 新增 `deploy/patches/waking_check_stage.py`：AstrBot v4.29.0 原文件加几行，在唤醒和分流判定之前，把每条非机器人自身的消息交给入站观察回调。没唤醒她的群聊、被指令或骰子分流走的消息，也都会进入记忆。
+- `deploy-windows/compose.yaml`：挂载上面两个新文件。
+- `register_predispatch`（TRPG 分流器）留到 TRPG 骰子插件实现时再加。
+
+**验证**：新增 `tests/test_dafeiyu_hooks.py`，共 19 项，用桩模块替代 AstrBot 和 aiocqhttp，直接执行两个核心文件，全部通过。换回未打补丁的原文件时有 3 项失败：出站事件不发，或者入站观察不调用。
+
 ## 未发布 · 身份标记「主人」改为「搭档」（2026-11-16）
 
 - face_convert 身份标记：`[主人(QQ)]` → `[搭档(QQ)]`，`[主人的朋友 …]` → `[搭档的朋友 …]`，与人格 v0.3 一致（之前她会以为另有一个"主人"，群里被问到时答「不是主人啦，是搭档」）。

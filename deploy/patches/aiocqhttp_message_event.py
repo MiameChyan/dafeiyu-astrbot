@@ -41,6 +41,26 @@ async def _outbound_gate() -> None:
         logger.info(f"Outbound limiter: waited {waited:.1f}s before sending.")
 
 
+# 大肥鱼补丁（记忆系统规格 §16.1 P-M1）：QQ 出站全部汇于 send_message，发送成功后
+# 通知挂钩点（deploy/patches/dafeiyu_hooks.py），记忆插件据此记下她说过的话。
+# 挂钩点模块没挂载或出错时照常发送。
+try:
+    from astrbot.core import dafeiyu_hooks as _dafeiyu_hooks
+except ImportError:
+    _dafeiyu_hooks = None
+
+
+def _emit_outbound(is_group: bool, session_id, message_chain) -> None:
+    if _dafeiyu_hooks is None:
+        return
+    try:
+        _dafeiyu_hooks.emit_outbound(
+            is_group=is_group, session_id=session_id, message_chain=message_chain
+        )
+    except Exception as e:
+        logger.warning(f"dafeiyu_hooks outbound failed, ignored: {e}")
+
+
 class AiocqhttpMessageEvent(AstrMessageEvent):
     def __init__(
         self,
@@ -173,7 +193,9 @@ class AiocqhttpMessageEvent(AstrMessageEvent):
             if not ret:
                 return
             await cls._dispatch_send(bot, event, is_group, session_id, ret)
+            _emit_outbound(is_group, session_id, message_chain)
             return
+        sent = False
         for seg in message_chain.chain:
             if isinstance(seg, Node | Nodes):
                 # 合并转发消息
@@ -189,21 +211,27 @@ class AiocqhttpMessageEvent(AstrMessageEvent):
                         payload["self_id"] = event["self_id"]
                     await _outbound_gate()
                     await bot.call_action("send_group_forward_msg", **payload)
+                    sent = True
                 else:
                     payload["user_id"] = session_id
                     if isinstance(event, Event) and event.get("self_id"):
                         payload["self_id"] = event["self_id"]
                     await _outbound_gate()
                     await bot.call_action("send_private_forward_msg", **payload)
+                    sent = True
             elif isinstance(seg, File):
                 d = await cls._from_segment_to_dict(seg)
                 await cls._dispatch_send(bot, event, is_group, session_id, [d])
+                sent = True
             else:
                 messages = await cls._parse_onebot_json(MessageChain([seg]))
                 if not messages:
                     continue
                 await cls._dispatch_send(bot, event, is_group, session_id, messages)
+                sent = True
                 await asyncio.sleep(0.5)
+        if sent:
+            _emit_outbound(is_group, session_id, message_chain)
 
     async def send(self, message: MessageChain) -> None:
         """发送消息"""
