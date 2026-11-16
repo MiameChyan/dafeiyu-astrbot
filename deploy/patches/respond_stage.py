@@ -15,7 +15,14 @@ from ..chat_layout import group_bubbles
 from ..context import PipelineContext, call_event_hook
 from ..stage import Stage, register_stage
 
+try:
+    # 拟人节奏补丁（deploy/patches/human_pacing.py）；没挂载时退回原行为。
+    from astrbot.core.utils import human_pacing
+except ImportError:
+    human_pacing = None
+
 DEFAULT_LOG_BASE = 2.6
+TYPING_REFRESH_SECONDS = 5.0
 
 
 def _resolve_log_base(value: float | str | None) -> float:
@@ -123,6 +130,74 @@ class RespondStage(Stage):
             except BaseException as e:
                 logger.error(f"Failed to parse the segmented-reply interval: {e}")
             logger.info(f"Segmented-reply interval: {self.interval}")
+
+    # ---- 拟人节奏 ----
+    def _pacing_enabled(self, event: AstrMessageEvent) -> bool:
+        """只给模型生成的聊天回复加节奏；指令、骰子、主动消息只走全局限速。"""
+        if human_pacing is None:
+            return False
+        result = event.get_result()
+        return result is not None and result.is_model_result()
+
+    @staticmethod
+    def _plain_len(comps) -> int:
+        return sum(
+            human_pacing.text_len(comp.text)
+            for comp in comps
+            if isinstance(comp, Comp.Plain)
+        )
+
+    def _first_delay(self, event: AstrMessageEvent, comps) -> float:
+        received_at = getattr(getattr(event, "message_obj", None), "timestamp", None)
+        return human_pacing.first_delay(
+            human_pacing.text_len(event.message_str),
+            self._plain_len(comps),
+            received_at,
+        )
+
+    def _can_show_typing(self, event: AstrMessageEvent) -> bool:
+        return (
+            event.get_platform_name() == "aiocqhttp"
+            and event.is_private_chat()
+            and getattr(event, "bot", None) is not None
+        )
+
+    async def _send_typing(self, event: AstrMessageEvent) -> None:
+        """私聊里显示「对方正在输入」；失败只记录，绝不挡住回复。"""
+        try:
+            await asyncio.wait_for(
+                event.bot.call_action(
+                    "set_input_status",
+                    user_id=str(event.get_sender_id()),
+                    event_type=1,
+                ),
+                timeout=3,
+            )
+        except Exception as e:
+            self._typing_failures = getattr(self, "_typing_failures", 0) + 1
+            if self._typing_failures <= 3 or self._typing_failures % 50 == 0:
+                logger.warning(
+                    f"set_input_status failed ({self._typing_failures} so far): {e}",
+                )
+
+    async def _paced_wait(self, event: AstrMessageEvent, seconds: float, label: str) -> None:
+        """等 seconds 秒；私聊期间每 5 秒刷新一次正在输入。被打断就提前结束。"""
+        if seconds <= 0:
+            return
+        logger.info(f"Human pacing: {label} wait {seconds:.1f}s.")
+        if not self._can_show_typing(event):
+            await asyncio.sleep(seconds)
+            return
+        loop = asyncio.get_running_loop()
+        end = loop.time() + seconds
+        while not event.is_stopped():
+            await self._send_typing(event)
+            step = min(TYPING_REFRESH_SECONDS, end - loop.time())
+            if step <= 0:
+                break
+            await asyncio.sleep(step)
+            if end - loop.time() <= 0:
+                break
 
     async def _word_cnt(self, text: str) -> int:
         """分段回复 统计字数"""
@@ -342,8 +417,19 @@ class RespondStage(Stage):
                     Comp.Record,
                     effective_max_bubbles,
                 )
+                paced = self._pacing_enabled(event)
                 for index, bubble in enumerate(bubbles):
-                    if index > 0:
+                    if paced and index == 0:
+                        await self._paced_wait(
+                            event, self._first_delay(event, bubble), "first bubble"
+                        )
+                    elif paced:
+                        await self._paced_wait(
+                            event,
+                            human_pacing.bubble_gap(self._plain_len(bubble)),
+                            f"bubble {index + 1}",
+                        )
+                    elif index > 0:
                         i = await self._calc_comp_interval(bubble[0])
                         await asyncio.sleep(i)
                     if event.is_stopped():
@@ -380,6 +466,14 @@ class RespondStage(Stage):
                         f"skipping the respond stage. chain: {result.chain}",
                     )
                     return
+                if self._pacing_enabled(event):
+                    await self._paced_wait(
+                        event, self._first_delay(event, result.chain), "reply"
+                    )
+                    if event.is_stopped():
+                        logger.info("Reply interrupted while pacing; not sending.")
+                        event.clear_result()
+                        return
                 sep_comps = self._extract_comp(
                     result.chain,
                     need_separately,
