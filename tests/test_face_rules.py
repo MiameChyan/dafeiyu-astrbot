@@ -248,7 +248,7 @@ asyncio.run(plugin.scrub_drafts(_Event(), resp))
 want = "嗯？就这么一个字呀。\n晚安，别眯着眼睛又玩手机。"
 check("scrub-drafts-unwrap", resp.completion_text == want, repr(resp.completion_text))
 
-# 11) 身份标记四象限（issue #18：主人私聊也必须带平台身份映射）
+# 11) 身份标记四象限（issue #18：搭档私聊也必须带平台身份映射）
 class _InEvent:
     def __init__(self, sid, name, group="", private=False, text="在吗"):
         self._sid, self._name, self._group, self._private = sid, name, group, private
@@ -283,10 +283,10 @@ class _InEvent:
 
 plugin.admins = ["123456"]
 for label, ev, want in (
-    ("group-admin", _InEvent("123456", "主号", group="g1"), "[主人(123456)] 在吗"),
+    ("group-admin", _InEvent("123456", "主号", group="g1"), "[搭档(123456)] 在吗"),
     ("group-member", _InEvent("222", "小明", group="g1"), "[小明(222)] 在吗"),
-    ("private-admin", _InEvent("123456", "主号", private=True), "[主人(123456)] 在吗"),
-    ("private-guest", _InEvent("333", "访客", private=True), "[主人的朋友 访客(333)] 在吗"),
+    ("private-admin", _InEvent("123456", "主号", private=True), "[搭档(123456)] 在吗"),
+    ("private-guest", _InEvent("333", "访客", private=True), "[搭档的朋友 访客(333)] 在吗"),
     ("other-channel", _InEvent("123456", "主号"), "在吗"),
 ):
     asyncio.run(plugin.inbound_face_to_text(ev))
@@ -296,7 +296,7 @@ for label, ev, want in (
 ev = _InEvent("123456", "主号", private=True)
 asyncio.run(plugin.inbound_face_to_text(ev))
 asyncio.run(plugin.inbound_face_to_text(ev))
-check("identity-tag: no-double", ev.message_str == "[主人(123456)] 在吗", repr(ev.message_str))
+check("identity-tag: no-double", ev.message_str == "[搭档(123456)] 在吗", repr(ev.message_str))
 
 # 私聊空消息不补「喊了你一声」（那是群聊专用）
 ev = _InEvent("123456", "主号", private=True, text="")

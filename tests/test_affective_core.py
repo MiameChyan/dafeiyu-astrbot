@@ -243,6 +243,13 @@ class CoreStorageTests(unittest.TestCase):
 
 
 class DynamicsAndCircadianTests(unittest.TestCase):
+    def test_strip_sender_tag_accepts_partner_tags_from_face_convert(self):
+        # face_convert 从人格 v0.3 起标「搭档」「搭档的朋友」；旧标记仍要能剥掉
+        for tagged in ("[搭档(123456)] 在吗", "[搭档的朋友 访客(333)] 在吗",
+                       "[主人(123456)] 在吗", "[主人的朋友 访客(333)] 在吗"):
+            with self.subTest(tagged=tagged):
+                self.assertEqual(strip_sender_tag(tagged), "在吗")
+
     def test_circadian_phases(self):
         t_sleep = make_ts(hour=23, minute=45)
         c_sleep = circadian_baseline(t_sleep, {"wake_hour": 8, "sleep_hour": 23})

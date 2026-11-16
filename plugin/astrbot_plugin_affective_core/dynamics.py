@@ -16,7 +16,7 @@ from .core import DEFAULTS, clamp, sanitize_label, valid_timestamp
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
-_TAG_PREFIX_RE = re.compile(r"^\s*\[(?:主人|群友|主人的朋友)[^\]\r\n]{0,40}\]\s*")
+_TAG_PREFIX_RE = re.compile(r"^\s*\[(?:主人|群友|主人的朋友|搭档|搭档的朋友)[^\]\r\n]{0,40}\]\s*")
 
 _SERIOUS_TASK_RE = re.compile(
     r"(?:```|Traceback|Exception:|Error:|报错|修\s*bug|查一下|帮我(?:看|查|写|改|算|分析|排查)|"
