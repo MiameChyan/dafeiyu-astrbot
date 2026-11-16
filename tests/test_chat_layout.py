@@ -160,6 +160,19 @@ check(
     repr(bubbles),
 )
 
+# 换行切出的段：分段器已经认定是边界，即使没有句末标点也各成一泡（人格 v0.3 少打标点）
+chain = [Plain("那快了，撑过去就解放"), Plain("考完想吃什么，先记着")]
+bubbles = mod.group_bubbles(chain, Plain, Record, 3)
+check("newline-split-own-bubbles", len(bubbles) == 2 and texts(bubbles[1]) == ["考完想吃什么，先记着"], repr(bubbles))
+# 但表情夹在中间时，仍按句末判断（同一句话不拆）
+chain = [Plain("那快了"), Face(), Plain("撑过去就解放")]
+bubbles = mod.group_bubbles(chain, Plain, Record, 3)
+check("face-between-still-one-bubble", len(bubbles) == 1, repr(bubbles))
+# 未闭合的书名号/引号仍合在一泡
+chain = [Plain("他说“先这样"), Plain("再那样”")]
+bubbles = mod.group_bubbles(chain, Plain, Record, 3)
+check("unclosed-pair-still-merged", len(bubbles) == 1, repr(bubbles))
+
 print()
 if failures:
     print("结果：%d 项失败" % len(failures))
