@@ -94,7 +94,9 @@ NapCat 小号接连被判「身份失效」后，2026-11-16 改用 [OpenQQ](http
 - **昵称**：上游私聊事件不带昵称；fork 从好友列表或 QQ 资料服务补上（缓存）。
 - **引用回复**：上游没有 `get_msg`，AstrBot 看不到被引用的那句；fork 用 QQ 随引用附带的被引用消息副本（`records`）回答，引用多久以前的消息都行；没有副本时再查本次运行的缓存和 QQ 本机历史。
 - **@ 唤醒**：上游没有 `get_stranger_info`，被 @ 的人没设群名片时 AstrBot 会丢掉整个 @ 段，@ 她不会被唤醒；fork 已实现。
-- **已知差异**：掉线监控 `watchdog.py` 目前只认 NapCat。
+- **掉线监控**：`.env` 里填 `OPENQQ_DIR`（OpenQQ 所在目录），`watchdog.py` 就会按 OpenQQ 的规则查（见下面「掉线 / 假在线监控」）。
+  改用 OpenQQ 后**别用 `start.ps1`**：它会把 NapCat 容器一起拉起来，NapCat 登的是同一个小号，会和 OpenQQ 互相顶号。
+  改为 `docker compose up -d astrbot` 起 AstrBot，监控用 `Start-Process pythonw watchdog.py -WindowStyle Hidden` 单独起（`stop.ps1` 照样能停）。
 
 ## 日常运维
 
@@ -112,8 +114,14 @@ AstrBot 重启后 NapCat 会在 30 秒内自动重连（2026-11-15 实测）。�
 
 小号被风控时，有时 NapCat 自己还显示「已登录」，但消息已经收不到了（假在线）。`start.ps1` 会在后台用 `pythonw` 拉起 [watchdog.py](watchdog.py)，`stop.ps1` 会先停掉它。它每 10 分钟检查一次：
 
-- **掉线**（60 秒后复查仍失败才算）：NapCat WebUI 连不上；显示未登录或已离线；OneBot `get_status` 离线；`nc_get_rkey` 向 QQ 服务器取数据失败。
-- **疑似假在线**：白天（默认北京时间 9–24 点）连续 3 小时一条消息都没收到。NapCat 刚重启不满 3 小时不判。
+- **查哪个协议端**：`.env` 的 `WATCHDOG_PROTOCOL`，默认 `auto`：OpenQQ 进程在跑就按 OpenQQ 查，否则 NapCat 容器在跑就按 NapCat 查，都没在跑直接报掉线。
+- **掉线**（60 秒后复查仍失败才算）：
+  - NapCat：WebUI 连不上；显示未登录或已离线；OneBot `get_status` 离线；`nc_get_rkey` 向 QQ 服务器取数据失败。
+  - OpenQQ：`node src/main.mjs start` 进程不在；`OPENQQ_DIR\.runtime\status.json` 不是 `session_ready`（被踢下线时 OpenQQ 会写成 `offline`）；
+    挂接的 QQ 进程已退出；AstrBot 容器没在跑；AstrBot 容器里 6199 端口没有已建立的连接。
+    OpenQQ 的 WebUI 密钥每次启动随机生成，所以不像 NapCat 那样主动调 OneBot 接口探测。
+- **疑似假在线**：白天（默认北京时间 9–24 点）连续 3 小时一条消息都没收到（NapCat 看自己的收消息日志，OpenQQ 看 AstrBot 的 `core.event_bus` 日志）。
+  协议端或 AstrBot 刚重启不满 3 小时不判。
 
 状态变化时弹 Windows 通知，没恢复就每 2 小时提醒一次，恢复后再通知一次。**只通知，不重启任何东西**：身份失效时快速登录必然失败，反复重启只会更像机器人。日志在 `logs\watchdog.log`，QQ 号、群号等长数字都会打码。
 
@@ -123,8 +131,7 @@ python watchdog.py --test-notify   # 试一下通知能不能弹出
 .\start.ps1 -NoBuild -NoWatchdog   # 不要监控
 ```
 
-阈值在 `.env` 里改：`WATCHDOG_INTERVAL_MIN`、`WATCHDOG_SILENCE_HOURS`、`WATCHDOG_ACTIVE_HOURS`。
-
+阈值在 `.env` 里改：`WATCHDOG_INTERVAL_MIN`、`WATCHDOG_SILENCE_HOURS`、`WATCHDOG_ACTIVE_HOURS`、`WATCHDOG_PROTOCOL`、`OPENQQ_DIR`。
 ## 验证状态（2026-11-15，Windows 11 + Docker Desktop 28.0.1）
 
 - ✅ AstrBot v4.29.0 构建与启动，四个核心补丁挂载到位
