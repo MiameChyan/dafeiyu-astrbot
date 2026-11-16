@@ -2,6 +2,32 @@
 
 > 每一次值得说的进化都会记在这里。
 
+## 未发布 · 身份标记「主人」改为「搭档」（2026-11-16）
+
+- face_convert 身份标记：`[主人(QQ)]` → `[搭档(QQ)]`，`[主人的朋友 …]` → `[搭档的朋友 …]`，与人格 v0.3 一致（之前她会以为另有一个"主人"，群里被问到时答「不是主人啦，是搭档」）。
+- affective_core 的 `strip_sender_tag` 同时认新旧两种标记，旧历史里的标记照样剥掉。
+- README / QUICKSTART 里的说明同步改名。
+- 验证：`tests/test_face_rules.py` 全部 PASS；`tests/test_affective_core.py` 新增的标记用例在旧正则上失败（2 个子用例）、新正则通过。
+
+## 未发布 · Windows 启停改为 OpenQQ + 数据卷；修复答非所问（2026-11-16）
+
+**事故**：她在群里答非所问。查下来主要是两件事叠在一起：
+1. `data_v4.db` 放在 Docker Desktop 的 Windows 绑定挂载上。从容器时间 18:10:16 起，数据库再也写不进去，后来新开连接也只报 `disk I/O error`；对话历史和调用统计都停在那一刻，`schedule_awareness` 一直报 `读取 cron_jobs 失败`。她每次回复都只能看到旧历史，看不到自己刚说过的话。关闭时 AstrBot 等了 120 秒也没退出，被强制结束（137）。
+2. 群聊上下文感知没开（`group_icl_enable=false`），她只看得到 @ 她的那一句。
+
+**改动**
+- `deploy-windows/compose.yaml`：AstrBot 数据改放 Docker 数据卷 `dafeiyu-astrbot-data`（external，卷不存在时直接报错）；`data/plugins`、`data/config` 仍绑定挂载到宿主机。NapCat 放进 `napcat` profile，默认不启动。
+- 新增 `deploy-windows/migrate-data-volume.ps1` + `migrate_data_volume.py`：一次性迁移，逐个库 `wal_checkpoint` + `integrity_check`；已迁移过就拒绝；旧文件移到 `data/_migrated_to_volume_<时间>/` 留作备份。
+- 重写 `deploy-windows/daily.ps1` 与根目录两个入口：启动时先停掉在跑的 NapCat，检查数据卷里有 `data_v4.db`（避免起一个空白实例），`compose up --no-deps --no-build --pull never astrbot`；OpenQQ 没在跑就在新窗口拉起（发现 QQ 已开着则提示先退出），等 `status.json` 变成本次的 `session_ready`（旧状态不算），确认 6199 有连接，最后才开监控。关闭时 OpenQQ 保持登录。新增 `-NoOpenQQ`、`-LoginTimeoutSeconds`。
+- `deploy-windows/start.ps1`（首次部署）：全新部署时创建数据卷；`.\data` 里有未迁移的旧数据就拒绝启动；只起 astrbot；同时写监控 pid 文件。
+- 线上配置（经面板以外方式改，备份 `cmd_config.json.bak_before_groupctx_*`）：`admins_id` 加入搭档的 QQ；`group_icl_enable=true`，`group_message_max_cnt=50`。
+- `deploy-windows/README.md`：OpenQQ fork 锁定提交更新为 `5f6d71a`（引用里的图片）；日常运维改为新入口与数据卷说明。
+
+**验证**
+- `tests/test_windows_lifecycle.py`：Windows PowerShell 5.1 与 PowerShell 7 各 33 项 OK。
+- 实机：迁移时 4 个库（data_v4、kb、doc、emoji）integrity 均为 ok；新启动脚本复用了在跑的 OpenQQ，确认 6199 已连上；容器内对 `data_v4.db` 可加写锁，`schedule_awareness` 的原查询能读出 `cron_jobs`。
+- 未验证：重启后还没有真实消息进来，历史确实恢复落库、群聊上下文注入，要等下一条消息确认。新窗口拉起 OpenQQ 这条路径只在模拟中测过，实机复用的是已在跑的 OpenQQ。
+
 ## 未发布 · 伽拉忒亚：共享库、人设与部署清单（2026-11-15）
 
 - 新增 `lib/dafeiyu-shared/`：记忆系统与 TRPG 插件共用的基础库（`shared.agentloop` 生成→核查→修正循环，`shared.observability` 日志、指标、回放），附日志与观测规格；插件仓库以 `git+…#subdirectory=lib/dafeiyu-shared` 固定提交引用。
