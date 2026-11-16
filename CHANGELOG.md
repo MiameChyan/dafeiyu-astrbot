@@ -2,6 +2,25 @@
 
 > 每一次值得说的进化都会记在这里。
 
+## 未发布 · 长期记忆改用 LivingMemory + 群聊改用 group_chat_plus；人格提示词 v0.7（2026-11-17）
+
+- 自建记忆系统 dafeiyu-memory-system 已归档（只读）。决定：能不写代码就不写，记忆、群聊回复都用开源插件，只自己做 TRPG。知识库继续用 AstrBot 自带的。
+- **线上插件**（插件目录在宿主机 `deploy-windows/data/plugins`，不在仓库里）：
+  - 停用 `astrbot_plugin_memory_core`，移到 `data/_disabled_plugins/`。它记下的事件和记忆文件都还保留。
+  - 安装 [LivingMemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory) **2.13.0**（AGPL-3.0）：
+    - 嵌入用本机 `ollama_bge-m3`；
+    - 作用域 `user` 模式，同一个人的记忆跨群、跨私聊共享；
+    - 搭档私聊设为隔离会话，私聊内容不进群；
+    - 自动清理保持"归档而非删除"。
+    - 装前看过源码：没有外发地址；对外 API 默认关闭。
+  - 安装 [group_chat_plus](https://github.com/Him666233/astrbot_plugin_group_chat_plus) **V1.2.3.hotfix.2**（AGPL-3.0）：
+    - 群聊里由 AI 读空气、决定要不要接话，它专门适配了 LivingMemory；
+    - 先只在一个群启用，私聊、主动对话、Web 面板保持关闭；
+    - 公网 IP 查询只在 Web 面板启动时触发，面板关闭时不会发生。
+  - AstrBot 配置：按 group_chat_plus 要求关闭 `platform_settings.empty_mention_waiting`。群聊上下文感知和"仅对 LLM 结果分段"原本就是开着的。改之前备份为 `cmd_config.json.bak_before_lm_gcp_*`。
+- **人格提示词 v0.7**：人设 §9.1 的自我认知原本要放进自建记忆系统的核心块 `self.md`，从未上线，所以她一直不知道自己的外形。现在把外形、名字来历、对自身运作的认知并入提示词开头一段。人设 §9 的分工表也同步更新：经历交给 LivingMemory，身份设定写在提示词里。
+  - 线上已写入 `personas` 表，写入前整库备份为 `data_v4.before_persona_v07.db`。写入前核对过：线上内容和 v0.6 正文逐字一致。
+
 ## 未发布 · 记忆文件放到宿主机（2026-11-17）
 
 - `deploy-windows/compose.yaml`：记忆插件的记忆文件（Markdown + 独立 git 仓库）绑定挂载到宿主机 `${MEMORY_DIR:-./memory}`，可以直接打开、修改，用 git 查看她记住了什么。插件的 `events.db`、`index.db` 是 SQLite，仍留在数据卷里。
