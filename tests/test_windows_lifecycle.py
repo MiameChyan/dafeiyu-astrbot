@@ -505,5 +505,28 @@ class WindowsLifecycleTests(unittest.TestCase):
         self.assertIn("另一个", result.stdout + result.stderr)
 
 
+
+class ComposeShutdownTests(unittest.TestCase):
+    """AstrBot runs as PID 1 and only handles SIGINT; Docker's default SIGTERM is ignored
+    and every `docker stop` ended in a forced kill (137). Keep the stop signal pinned."""
+
+    def compose(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("PyYAML is required")
+        return yaml.safe_load((ROOT / "deploy-windows" / "compose.yaml").read_text(encoding="utf-8"))
+
+    def test_astrbot_stops_with_sigint_and_a_grace_period(self):
+        service = self.compose()["services"]["astrbot"]
+        self.assertEqual(service.get("stop_signal"), "SIGINT")
+        self.assertIn("stop_grace_period", service)
+
+    def test_napcat_profile_and_external_data_volume(self):
+        compose = self.compose()
+        self.assertEqual(compose["services"]["napcat"].get("profiles"), ["napcat"])
+        self.assertTrue(compose["volumes"]["astrbot-data"].get("external"))
+
+
 if __name__ == "__main__":
     unittest.main()
