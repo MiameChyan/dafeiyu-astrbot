@@ -52,6 +52,24 @@ docker compose logs astrbot | Select-String "Initial"
 - 插件：`python deploy-kit/preflight.py --stage-payload <目录>` 组装干净插件，把 `plugins/` 下的文件夹拷进 `data\plugins\`，
   重启 AstrBot。依赖（dashscope、imageio-ffmpeg、aiohttp）镜像里已有。
 
+### 4. 活人感相关配置（2026-11-16 实测）
+
+- **分段回复**：`platform_settings.segmented_reply` 设 `enable: true`、`max_segments: 3`，
+  `regex` 改成 `.*?[。？！?!~…\n]+|.+$`。人格 v0.3 句末大多不打标点、靠换行分条，默认正则只按句号切，
+  会把两行话塞进同一个气泡。`rate_limit.count` 降到 `10`。
+- **表情包**：插件市场装「表情包小偷」（`nagatoquin33/astrbot_plugin_stealer`，审查过的是 v3.2.2 / `6a993b2`）。
+  开 `steal_meme`；`vision_provider_id` 填对话模型（deepseek-flash 能看图）；保持 `audit_required`（偷来的图先在
+  插件的「表情管理」里人工通过才入库）。JEV / TypeSafe 留空不开，否则对话片段会发到第三方。
+- **热梗词典**：知识库 + [热梗词典](../docs/知识库-热梗词典示例.md)。
+  - 嵌入和重排必须加成**嵌入 / 重排类型**的提供商。挂在对话源下面的模型会被当成聊天模型，知识库选不到。
+    面板入口找不到时，可以按 AstrBot 自带模板直接写进 `cmd_config.json` 的 `provider`（AstrBot 停止时改），再到面板里填 key：
+    - 嵌入：`type: openai_embedding`，`embedding_api_base: https://api.siliconflow.cn/v1`，`embedding_model: BAAI/bge-m3`，维度 1024；
+    - 重排：`type: vllm_rerank`，`rerank_api_base: https://api.siliconflow.cn`（**不带** `/v1`），`rerank_model: BAAI/bge-reranker-v2-m3`；
+    - 不想把聊天内容发给第三方时，可改用本机 Ollama：`ollama pull bge-m3`，嵌入类型选 Ollama Embedding，地址 `http://host.docker.internal:11434`。
+  - 新建知识库 `热梗词典`，导入词典文档，`kb_names: ["热梗词典"]`。
+  - 设 `kb_agentic_mode: true`（按需检索）。默认模式不设分数门槛，每条消息都会把 5 块词典塞进上下文；
+    按需模式下，模型遇到不认识的说法才调 `astr_kb_search`。人格提示词里的「梗」规则负责提醒她去查。
+
 ## 日常运维
 
 ```powershell
