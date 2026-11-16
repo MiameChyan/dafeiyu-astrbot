@@ -81,7 +81,7 @@ docker compose exec astrbot astrbot password     # 交互式重置（v4.24.5+）
 
 | 提供商 | 用途 | 关键点 |
 |---|---|---|
-| DeepSeek (`deepseek-chat`) | 对话主力 | `https://api.deepseek.com/v1` |
+| DeepSeek (`deepseek-flash`) | 对话主力 | `https://api.deepseek.com/v1`（旧名 `deepseek-chat` 已不可用） |
 | 百炼视觉 (`qwen3-vl-plus`) | 图片/视频画面转述 | 填到「图片转述提供商」 |
 | 百炼语音 (`qwen-audio-3.1-tts-flash`) | 语音条 | 先做音色复刻拿 voice_id |
 | Ollama 嵌入 (`bge-m3`) | 记忆检索 | 见下节「接宿主 Ollama」 |
@@ -167,6 +167,8 @@ tar -czf ~/dafeiyu-macos-$(date +%F).tar.gz data napcat compose.yaml .env
 
 - AstrBot：改 `../deploy/Dockerfile` 的 `FROM` tag（当前 `v4.29.0`）→ `./start.sh --pull`。
   `--pull` 只影响这个构建基础镜像，不会拉 NapCat。
+- ⚠️ NapCat 已于 2026-11-12 停更，`v4.18.37` 已无法从 Docker Hub 拉取；新部署改用社区备份的 v4.18.42 镜像包
+  （`docker load`，arm64 包使用前需自行核验），见 [NapCat 停更与镜像来源](../docs/NapCat停更与镜像来源.md)。
 - NapCat：改本目录 `compose.yaml` 的 `image` tag（当前 `v4.18.37`）→ `docker compose pull napcat`，
   再 `./start.sh --no-build`。
 - 升完都重新对照 `../deploy/patches/` 是否仍适用。
