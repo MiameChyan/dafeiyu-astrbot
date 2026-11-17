@@ -40,7 +40,7 @@ QQ 小号 ── 桌面 QQ NT + OpenQQ（宿主机）── 反向 WS 127.0.0.1:
 |---|---|
 | [`deploy-windows/`](deploy-windows/) | Windows 部署套件：compose、首次部署脚本、日常启停、数据卷迁移、掉线监控。**从这里开始** |
 | [`deploy/Dockerfile`](deploy/Dockerfile) | AstrBot 镜像（官方镜像 + 少量依赖） |
-| [`deploy/patches/`](deploy/patches/) | AstrBot v4.29.0 核心补丁：按语义分气泡发送、拟人节奏与出站限速、挂钩点（留给 TRPG 插件）、语音合成（暂未启用） |
+| [`deploy/patches/`](deploy/patches/) | AstrBot v4.29.0 核心补丁：按语义分气泡发送、拟人节奏与出站限速、挂钩点（TRPG 入站观察、同步分流与出站通知）、语音合成（暂未启用） |
 | [`deploy/heal_ws.py`](deploy/heal_ws.py) | NapCat 备用时的 WS 断线自愈 |
 | [`plugin/astrbot_plugin_face_convert/`](plugin/astrbot_plugin_face_convert/) | 出站：表情名转真 QQ 表情、合并气泡、清理草稿和回声；入站：图片、语音、视频转述，给群聊消息加身份标记 |
 | [`plugin/astrbot_plugin_chat_rhythm/`](plugin/astrbot_plugin_chat_rhythm/) | 私聊连发合并（等对方说完再回）；纯表情包按概率不回 |

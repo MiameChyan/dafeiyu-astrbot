@@ -15,7 +15,10 @@
         fn(info) 在 QQ 发送成功后以后台任务调用；info 有 is_group、session_id、
         message_chain、origin 四个属性。发送失败时不调用。
 
-TRPG 分流器 register_predispatch 留到 TRPG 骰子插件实现时再加（它需要能改变流水线走向）。
+    register_predispatch(fn) -> 取消函数
+        同步返回 None / Verdict.PASS、Verdict.BLOCK 或 Verdict.WAKE(message_str=None)。
+    predispatch(event) -> Verdict
+        按注册顺序取第一个非放行判定；异常、异步结果与非法值按放行处理。
 """
 from __future__ import annotations
 
@@ -24,7 +27,7 @@ import inspect
 import logging
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, ClassVar
 
 logger = logging.getLogger("astrbot")
 
@@ -117,3 +120,53 @@ def _spawn(fn: Callable, awaitable: Any) -> None:
         return
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """稳定的同步分流判定；只有 WAKE 可以携带消息改写。"""
+
+    kind: str
+    message_str: str | None = None
+    PASS: ClassVar[Verdict]
+    BLOCK: ClassVar[Verdict]
+
+    @classmethod
+    def WAKE(cls, message_str: str | None = None) -> Verdict:
+        return cls("wake", message_str)
+
+
+Verdict.PASS = Verdict("pass")
+Verdict.BLOCK = Verdict("block")
+_predispatch: list[Callable[[Any], Any]] = []
+
+
+def register_predispatch(fn: Callable[[Any], Any]) -> Callable[[], None]:
+    """注册轻量同步判定，返回可重复调用的取消函数。"""
+    return _register(_predispatch, fn)
+
+
+def predispatch(event: Any) -> Verdict:
+    """按快照顺序取首个非放行判定；回调失败不影响其余回调。"""
+    for fn in tuple(_predispatch):
+        try:
+            verdict = fn(event)
+            if inspect.isawaitable(verdict):
+                if inspect.iscoroutine(verdict):
+                    verdict.close()
+                logger.warning("[dafeiyu_hooks] 分流回调返回异步结果，已按放行处理")
+                continue
+            if verdict is None or verdict == Verdict.PASS:
+                continue
+            if isinstance(verdict, Verdict) and (
+                verdict == Verdict.BLOCK
+                or (verdict.kind == "wake" and (
+                    verdict.message_str is None or isinstance(verdict.message_str, str)
+                ))
+            ):
+                return verdict
+            logger.warning("[dafeiyu_hooks] 分流回调返回非法判定，已按放行处理")
+        except Exception:
+            # 不记录异常消息和事件，避免回调把账号、密钥带入日志。
+            logger.warning("[dafeiyu_hooks] 分流回调抛出异常，已按放行继续处理")
+    return Verdict.PASS
