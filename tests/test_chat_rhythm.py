@@ -532,11 +532,9 @@ class WiringTests(unittest.TestCase):
     def test_plugin_files_and_staging(self):
         for f in ("main.py", "rhythm.py", "metadata.yaml", "_conf_schema.json"):
             self.assertTrue(os.path.isfile(os.path.join(PLUGIN, f)), f)
-        # 按需安装（不进 deploy-kit 默认清单，免得所有部署悄悄多出等待和跳过）：README 要写清楚怎么装
+        # 部署说明要写清楚怎么装
         with open(os.path.join(ROOT, "deploy-windows", "README.md"), encoding="utf-8") as f:
             self.assertIn("astrbot_plugin_chat_rhythm", f.read())
-        with open(os.path.join(ROOT, "deploy-kit", "preflight.py"), encoding="utf-8") as f:
-            self.assertNotIn("astrbot_plugin_chat_rhythm", f.read())
 
     def test_runs_after_face_convert(self):
         with open(os.path.join(PLUGIN, "main.py"), encoding="utf-8") as f:
