@@ -67,6 +67,7 @@ docker compose logs astrbot | Select-String "Initial"
 - `astrbot_plugin_face_convert`：表情、气泡、身份标记、媒体转述。
 - `astrbot_plugin_schedule_awareness`：定时任务注入。
 - `astrbot_plugin_chat_rhythm`：私聊里对方连发几条时，等 4 秒静默、并且对方不在打字，再一次回复；一直在打字最多等 15 秒。这一批全是表情包（不含普通照片）时，有 60% 的概率不回，连发几张时每多一张减半。以 `/`、`.`、`。` 开头的指令和群聊不受影响。
+- `astrbot_plugin_deepseek_search`：联网搜索兜底，提供 `search_web` 工具，走 DeepSeek Search API。`provider_id` 填 DeepSeek 对话提供商的 ID（默认 `deepseek/deepseek-flash`），Key 从它那里取。AstrBot 自带的联网搜索保持关闭。
 
 社区插件（装前都看过源码；版本号是审查过的版本）：
 
@@ -76,6 +77,7 @@ docker compose logs astrbot | Select-String "Initial"
   - `trigger_keywords` 填机器人的名字和常见写法，并开启 `keyword_smart_mode`，命中后仍要过读空气判断；
   - 私聊、主动对话、Web 面板保持关闭；
   - **本地补丁**：这个版本的 `utils/message_cleaner.py` 会把群友原话从对话历史里删掉，要把上游 `beta` 分支的那一行清理规则移植过来，详见 CHANGELOG。
+- **Anime 知识库**（`ShioMI39/astrbot_plugin_animerag`，审查过 `04096ee`，**部署 `9d01d26`**：`04096ee` 漏提交了 `core/search/expand.py`、`gate.py`，加载失败）：只注册 `search_anime` 等 5 个工具，无消息钩子。**本地补丁**：`core/config.py` 顶部 `import winreg` 改成 try/except（容器是 Linux，原写法直接导入失败）。数据包是作者 Release 的 `data.zip`（738 MB，解压 1.4 GB），解压到卷里的 `data/plugin_data/astrbot_plugin_animerag/`。配置：`embedding_provider_id` 填 `ollama_bge-m3`，`rerank_provider_id` 填 `siliconflow_bge-reranker-v2-m3`，开 `enable_moegirl`。
 - **表情包小偷**（`nagatoquin33/astrbot_plugin_stealer`，审查过 v3.2.2 / `6a993b2`）：开 `steal_meme`；`vision_provider_id` 填对话模型；保持 `audit_required`（偷来的图人工通过才入库）。JEV / TypeSafe 留空，否则对话片段会发给第三方。
 
 ### 4. 活人感相关配置（2026-11-16 实测）

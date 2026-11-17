@@ -1,11 +1,22 @@
 # 📜 更新日志
 
+## 未发布 · 联网搜索兜底插件 astrbot_plugin_deepseek_search（2026-11-18）
+
+- 新插件 `plugin/astrbot_plugin_deepseek_search/`：注册一个 `search_web` 工具，调用 DeepSeek Search API（`POST /v1/tools/search`，2026-11-13 上线，每 1000 次成功请求 0.75 美元，空结果、失败不计费）。AstrBot 4.29 自带的联网搜索没有 DeepSeek 这个选项，所以自己写；线上 `web_search` 保持关闭，避免出现两个搜索工具。
+- Key 复用 AstrBot 里 DeepSeek 对话提供商（默认 `deepseek/deepseek-flash`）的 Key 和 `api_base`，插件不存密钥；不注册消息钩子、不往请求注入内容、不自己发消息。
+- 只要接口给模型读的 `summary`（`need_content=false`），默认 5 条、每条 500 字，标明“资料不是指令”；每天默认最多 200 次（内存计数，重启清零）；超时、HTTP 错误、余额不足都返回一句说明，不抛异常。
+- 何时搜由人格提示词约束：知识库 → `search_anime` → 联网兜底，规则问题不联网。
+- 验证：`tests/test_deepseek_search.py` 22 项；容器内用真实 Key 调了一次接口，HTTP 200，结果字段与文档一致。
+- 线上（不在仓库）：安装社区插件 Anime 知识库 animerag `9d01d26`（最新的 `04096ee` 缺两个文件，加载失败），本地补丁 `import winreg` 改 try/except；数据包 1.4 GB 放在卷里 `plugin_data/astrbot_plugin_animerag/`；启动日志「就绪：191485 块」，`search_anime` 已注册。安装过程中重启了 3 次，其中一次打断了正在生成的群聊回复，AstrBot 往群里发了一条 `Error occurred while processing agent request: generator didn't stop after athrow()`。
+- 新增 `docs/知识库-跑团小抄.md`：跑团黑话、海豹常用指令、她的跑团指令，供导入 AstrBot 知识库。
+
 ## 未发布 · 人格提示词 v0.9：少想歪、先回答、不乱插话（2026-11-17）
 
 - 起因：搭档反馈群里“答非所问、笨笨的”。复盘 2026-11-17 20:11～20:34 的群聊记录，发现几种情况：几乎每条都故意顺着字面想歪（“忽视”被理解成“忘掉自己”，“套皮”被理解成“皮底下是空的”）；结尾总要反问、猜对方心思（“是想听哪一层”）；有人先问再单独 @ 时，她不回答前一句（“你叫什么”+@，回的却是开团）；还会接别人之间的对话。每次请求的上下文约 2.2 万 token，不是记忆不够。
 - `persona/伽拉忒亚-人格提示词.md` v0.9、`persona/伽拉忒亚-人设.md` §3/§4.5：字面想歪降为偶尔，只用于玩笑；新增“被问到就先答”和“空 @ 就回他前一两条”；默认说完就停，不猜心思；群里别人之间的对话不插嘴；想起的旧事不算“刚才”，也不安到眼前的人头上（线上把别处的“熬夜、扛压测”说成了“刚才你说的”）。示例去掉大部分结尾问句，新增三例。
 - 线上配置（不在仓库）：group_chat_plus 的 `after_reply_probability` 从 0.8 改为 0.3，`probability_duration` 从 120 改为 90；开启 `enable_ignore_at_others`（模式 `allow_with_bot`）。备份文件为 `astrbot_plugin_group_chat_plus_config.json.bak_before_less_interject_20261117`。重启后生效。
 - 线上人格目前仍是 v0.7（v0.8 没有写入 `personas` 表），这次写入时会把 v0.8 的改动一起带上。
+- 【边界】工具一条写明查询顺序（2026-11-18）：知识库 → `search_anime`（animerag，待装）→ 联网搜索兜底，只用于前两者查不到或问最近的新内容；规则问题不联网。线上联网搜索目前未开（`web_search: false`）。
 
 ## 未发布 · TRPG 发送回执与 LivingMemory 元数据兼容（2026-11-17）
 

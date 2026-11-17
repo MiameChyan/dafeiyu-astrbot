@@ -1,0 +1,5 @@
+name: astrbot_plugin_deepseek_search
+display_name: 大肥鱼的联网搜索
+desc: 联网搜索兜底：search_web 工具，走 DeepSeek Search API，复用 DeepSeek 对话提供商的 Key
+version: v1.0.0
+author: dafeiyu-tools
