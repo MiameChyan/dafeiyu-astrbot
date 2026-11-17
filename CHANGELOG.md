@@ -2,6 +2,29 @@
 
 > 每一次值得说的进化都会记在这里。
 
+## 未发布 · 工作区大修：只留本机部署用得到的部分（2026-11-17）
+
+决定：能用现成插件就不自己写；记忆用 LivingMemory，群聊用 group_chat_plus，接下来只自己做 TRPG 插件。本仓库据此精简，删除的内容在 git 历史里都能找到。
+
+- **删除**：
+  - B 站、抖音自主活动全套：插件、伴随服务、41 个测试、相关文档；
+  - 手机模拟器和浏览器远程控制（`phone_mcp`、`browser_use`），云服务器 SSH 运维工具（`ops_mcp`）；
+  - 云服务器和 macOS 部署（`deploy/compose.yaml` 等、`deploy-kit/`、`deploy-macos/`）、一次性事故脚本；
+  - 两份未装插件的补丁：proactive_chat（group_chat_plus 自带主动对话）、EmotionAI（已由 affective_core 取代）；
+  - 记忆观测台（`deploy/memory_observatory`，新版 LivingMemory 自带面板）；
+  - 自建记忆插件的记忆目录挂载、`MEMORY_DIR`；
+  - 旧课程模板、`QUICKSTART.md`、`docs/部署指南.md`。后两份讲的是上游的云端部署和 deploy-kit，已由 `deploy-windows/README.md` 取代。
+- **保留**：
+  - affective_core：以后部署；
+  - NapCat 备用：compose profile、`heal_ws.py`、监控里的 NapCat 模式；
+  - 语音补丁：`dashscope_tts.py`、tts_emotion_router 补丁；
+  - 上游素材、`lib/dafeiyu-shared`（留给 TRPG）、上游 `大肥鱼-人格.md`（将作为 AstrBot 里的备用人格）。
+- **修改**：
+  - `heal_ws.py` 找 NapCat 配置的候选路径从 deploy-macos 改成 deploy-windows，并新增测试；
+  - `README.md` 改写成部署实践记录，不写人格的具体内容；
+  - 同步更新 `deploy-windows/README.md`（按实际在用的插件和配置改写）、`AGENTS.md`、开发 skill、部署清单、指令手册、导入指南、聊天质量计划。
+- **测试**：全量回归原来有 31 项失败，全部出在被删的部分（缺 `mcp`、B 站环境、WSL bash）；清理后全部通过。
+
 ## 未发布 · 课程文件 + 人格提示词 v0.8（2026-11-17）
 
 - 新增 `persona/伽拉忒亚-课程.md`，课程统一在这里管理。每条课程都要写来源事件、针对的问题、正文和怎么看效果，按"草稿 → 试行 → 生效 → 退役"走生命周期。写作规矩沿用参考项目的经验：用自省句，不列具体的词和句子，每条要短。

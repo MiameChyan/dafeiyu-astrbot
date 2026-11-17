@@ -1,6 +1,6 @@
 # NapCat 停更与镜像来源
 
-> 2026-11-15 记录。适用于本仓库所有部署套件（`deploy/`、`deploy-macos/`、`deploy-windows/`）。
+> 2026-11-15 记录。当时适用于本仓库的所有部署套件；现在只保留 `deploy-windows/`。2026-11-16 起协议端改用 OpenQQ，NapCat 留作备用（compose 的 `napcat` profile）。
 
 ## 发生了什么
 

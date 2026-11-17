@@ -2,7 +2,7 @@
 #
 # 用法：powershell -ExecutionPolicy Bypass -File deploy-windows\start.ps1
 # 约定：宿主路径都相对本文件；端口 / 时区 / QQ 号走同目录 .env。
-# 依赖：镜像构建复用 ../deploy/Dockerfile，核心补丁复用 ../deploy/patches/（与 deploy-macos 相同做法）。
+# 依赖：镜像构建用 ../deploy/Dockerfile，核心补丁用 ../deploy/patches/。
 name: dafeiyu-windows
 
 services:
