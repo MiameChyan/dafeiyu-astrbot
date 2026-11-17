@@ -44,8 +44,11 @@ services:
       - ../deploy/patches/stage.py:/AstrBot/astrbot/core/pipeline/result_decorate/stage.py:ro
       - ../deploy/patches/respond_stage.py:/AstrBot/astrbot/core/pipeline/respond/stage.py:ro
       - ../deploy/patches/chat_layout.py:/AstrBot/astrbot/core/pipeline/chat_layout.py:ro
-      # 拟人节奏：回复前按读消息/想/打字的时间等待，所有出站消息过全局限速
-      - ../deploy/patches/human_pacing.py:/AstrBot/astrbot/core/utils/human_pacing.py:ro
+      # 拟人节奏：回复前按读消息/想/打字的时间等待，所有出站消息过全局限速。
+      # 2026-11-17 停用：群聊的回复节奏交给 group_chat_plus。不挂载时 respond_stage /
+      # aiocqhttp 补丁自动退回原行为（气泡间隔用 segmented_reply 的 interval，出站不限速）。
+      # 要恢复就取消下一行的注释并重建容器。
+      # - ../deploy/patches/human_pacing.py:/AstrBot/astrbot/core/utils/human_pacing.py:ro
       - ../deploy/patches/aiocqhttp_message_event.py:/AstrBot/astrbot/core/platform/sources/aiocqhttp/aiocqhttp_message_event.py:ro
       # 挂钩点（记忆系统规格 §16.1）：注册表 + 入站观察（唤醒判定前）。出站捕获 P-M1
       # 在上面的 aiocqhttp_message_event.py 里。没有插件注册回调时什么也不做。
