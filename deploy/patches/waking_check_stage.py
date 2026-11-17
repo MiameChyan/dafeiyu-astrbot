@@ -35,6 +35,26 @@ def _observe_inbound(event: AstrMessageEvent) -> None:
     except Exception as e:
         logger.warning(f"dafeiyu_hooks inbound failed, ignored: {e}")
 
+
+_predispatch_warned = False
+
+
+def _check_predispatch(event: AstrMessageEvent):
+    global _predispatch_warned
+    if str(event.get_self_id()) == str(event.get_sender_id()):
+        return None
+    try:
+        if _dafeiyu_hooks is None:
+            raise AttributeError("挂钩模块未挂载")
+        return _dafeiyu_hooks.predispatch(event)
+    except Exception:
+        if not _predispatch_warned:
+            # 异常文本可能包含账号或令牌，只记录固定提示。
+            logger.warning("大肥鱼分流挂钩不可用，已降级为放行（本模块仅告警一次）")
+            _predispatch_warned = True
+        return None
+
+
 UNIQUE_SESSION_ID_BUILDERS: dict[str, Callable[[AstrMessageEvent], str | None]] = {
     "aiocqhttp": lambda e: f"{e.get_sender_id()}_{e.get_group_id()}",
     "slack": lambda e: f"{e.get_sender_id()}_{e.get_group_id()}",
@@ -120,6 +140,20 @@ class WakingCheckStage(Stage):
             return
 
         _observe_inbound(event)
+        verdict = _check_predispatch(event)
+        force_wake = False
+        if verdict is not None:
+            if verdict == _dafeiyu_hooks.Verdict.BLOCK:
+                event.stop_event()
+                return
+            if verdict.kind == "wake":
+                force_wake = True
+                event.is_wake = True
+                event.is_at_or_wake_command = True
+                if verdict.message_str is not None:
+                    # v4.29.0 CommandFilter 经 get_message_str() 读取 event.message_str；
+                    # message_obj 保留协议端原始文本，入站观察已经完成。
+                    event.message_str = verdict.message_str
 
         # 设置 sender 身份
         preserve_whitespace = event.get_platform_name() == "lark" and (
@@ -140,8 +174,8 @@ class WakingCheckStage(Stage):
         # 检查 wake
         wake_prefixes = self.ctx.astrbot_config["wake_prefix"]
         messages = event.get_messages()
-        is_wake = False
-        for wake_prefix in wake_prefixes:
+        is_wake = force_wake
+        for wake_prefix in (() if force_wake else wake_prefixes):
             if message_str.startswith(wake_prefix):
                 if (
                     not event.is_private_chat()
