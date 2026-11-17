@@ -33,6 +33,19 @@ logger = logging.getLogger("astrbot")
 
 send_origin: ContextVar[str] = ContextVar("dafeiyu_send_origin", default="self")
 
+# 每次发送的可选回执容器；ContextVar 防止并发群聊互相拿错消息 ID。
+send_receipts: ContextVar[list | None] = ContextVar("dafeiyu_send_receipts", default=None)
+
+
+def capture_send_result(result: Any) -> None:
+    receipts = send_receipts.get()
+    if receipts is None or not isinstance(result, dict):
+        return
+    mid = result.get("message_id")
+    if mid is not None:
+        receipts.append(mid)
+
+
 _inbound: list[Callable[[Any], Any]] = []
 _outbound: list[Callable[[Any], Any]] = []
 _tasks: set[asyncio.Task] = set()  # 持有引用，防止后台任务被回收

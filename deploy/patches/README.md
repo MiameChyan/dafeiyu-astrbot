@@ -10,7 +10,7 @@
 - `respond_stage.py`：按语义气泡发送（表情并回句子），首条不等待；被新消息打断时停止剩余气泡
 - `chat_layout.py`：上面的分泡 / 朗读文本 / 音频校验纯函数（两个 stage 共用）
 - `human_pacing.py` + `aiocqhttp_message_event.py`：拟人节奏与全局出站限速；后者同时是出站挂钩点
-  （QQ 发送成功后通知 `dafeiyu_hooks`）。**2026-11-17 起 `human_pacing.py` 停用**（compose 里挂载行已注释，
+  （QQ 发送成功后通知 `dafeiyu_hooks`，并向当前可选 `send_receipts` 容器提供实际消息 ID，供 TRPG 撤回；不改变原发送 API）。**2026-11-17 起 `human_pacing.py` 停用**（compose 里挂载行已注释，
   群聊节奏交给 group_chat_plus）；两个 stage 补丁在它缺席时自动退回原行为，文件保留以便恢复。
 - `dafeiyu_hooks.py`：挂钩点注册表（不依赖 AstrBot），挂到 `astrbot/core/dafeiyu_hooks.py`，接口见文件头注释。
   原为自建记忆系统而写（该项目已归档），现留给 TRPG 插件做骰子分流与消息观察；没有插件注册回调时什么也不做
