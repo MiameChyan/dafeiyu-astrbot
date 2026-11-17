@@ -189,7 +189,7 @@ rc, calls = run_main([False], OFF_TARGET)
 check("main: disabled target returns 1", rc == 1, rc)
 check("main: disabled target not enabled", not any(c[0].endswith("SetConfig") for c in calls))
 
-# ---------- 8. 路径 / 容器 / WebUI 地址自动探测（macOS 套件与云端都靠这套） ----------
+# ---------- 8. 路径 / 容器 / WebUI 地址自动探测 ----------
 import tempfile
 from pathlib import Path
 
@@ -229,6 +229,24 @@ finally:
     os.chdir(real_cwd)
     for key in ("DAFEIYU_NAPCAT_CONFIG", "DAFEIYU_NAPCAT_BASE", "DAFEIYU_CONTAINER"):
         os.environ.pop(key, None)
+
+# Windows 套件：脚本在 deploy/，NapCat 备用配置在同级的 deploy-windows/napcat/ 下
+repo = Path(tempfile.mkdtemp())
+(repo / "deploy").mkdir()
+win_cfg = repo / "deploy-windows" / "napcat" / "config" / "webui.json"
+win_cfg.parent.mkdir(parents=True)
+win_cfg.write_text('{"token": "t"}', encoding="utf-8")
+empty_cwd = Path(tempfile.mkdtemp())
+try:
+    mod.HERE = str(repo / "deploy")
+    os.chdir(str(empty_cwd))
+    check("config: Windows 套件自动找到",
+          mod.config_path() == os.path.normpath(str(win_cfg)), mod.config_path())
+    check("kit_dir: Windows 套件根目录",
+          mod.kit_dir() == os.path.normpath(str(repo / "deploy-windows")), mod.kit_dir())
+finally:
+    mod.HERE = real_here
+    os.chdir(real_cwd)
 
 # 容器探测：docker ps 返回 compose 项目前缀的容器名时要用它，失败才回退 astrbot
 real_subprocess2 = mod.subprocess

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""云端 NapCat <-> AstrBot WS 自愈（Docker 容器版）。
+"""NapCat <-> AstrBot WS 自愈（Docker 容器版）。2026-11-16 起协议端改用 OpenQQ，NapCat 只作备用。
 
 原理同本地 heal-connection.py：通过 NapCat WebUI API 把指向 AstrBot 的
 websocket 客户端"关一下再开"，不重启 QQ、不需要重新扫码。
@@ -13,16 +13,16 @@ websocket 客户端"关一下再开"，不重启 QQ、不需要重新扫码。
 退出码：连接正常或修复成功 = 0；没修好、配置里没有目标 = 1。
 
 用法：
+    Windows 本机（NapCat 备用）  python deploy/heal_ws.py      # 在仓库根目录跑
     云端（/opt/dafeiyu）        python3 /opt/dafeiyu/heal_ws.py
-    macOS 本机（deploy-macos）  python3 ../deploy/heal_ws.py   # 在 deploy-macos/ 里跑
 
 不写死路径/容器名，按下面的顺序自动找（都可用环境变量覆盖）：
 
     配置    DAFEIYU_NAPCAT_CONFIG > <脚本目录>/napcat/config/webui.json
-            > <脚本目录>/../deploy-macos/napcat/config/webui.json
+            > <脚本目录>/../deploy-windows/napcat/config/webui.json
             > /opt/dafeiyu/napcat/config/webui.json > ./napcat/config/webui.json
     容器    DAFEIYU_CONTAINER > `docker ps` 里 label com.docker.compose.service=astrbot
-            的容器（deploy/ 的 astrbot 与 deploy-macos/ 的 dafeiyu-macos-astrbot-1 都能认）
+            的容器（deploy-windows 的 dafeiyu-windows-astrbot-1 也能认）
     WebUI   DAFEIYU_NAPCAT_BASE > 读配置所在套件的 .env 里 NAPCAT_PORT
             > 默认 http://127.0.0.1:6099
 """
@@ -79,7 +79,7 @@ def config_path():
         return env
     candidates = [
         os.path.join(HERE, "napcat", "config", "webui.json"),
-        os.path.join(HERE, "..", "deploy-macos", "napcat", "config", "webui.json"),
+        os.path.join(HERE, "..", "deploy-windows", "napcat", "config", "webui.json"),
         "/opt/dafeiyu/napcat/config/webui.json",
         os.path.join(os.getcwd(), "napcat", "config", "webui.json"),
     ]

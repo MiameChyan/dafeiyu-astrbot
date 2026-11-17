@@ -17,27 +17,21 @@
 
 | 路径 | 作用 |
 |---|---|
-| `plugin/astrbot_plugin_bili_activity/` | B站/抖音自主活动、目标、好奇心、持有念头、表达、研究方法 |
-| `plugin/astrbot_plugin_affective_core/` | 情感状态、牵挂账本、表达桥；独立 `affective.db` |
-| `plugin/astrbot_plugin_face_convert/` | QQ 出站整形、入站媒体处理、身份标记 |
-| `plugin/astrbot_plugin_schedule_awareness/` | 定时任务注入 |
-| `deploy/bili_activity/` | 本机 B站伴随服务、媒体处理、运维脚本 |
-| `deploy/memory_observatory/` | 小小房间、记忆星海、只读观测台 |
-| `tests/` | unittest 回归；多数插件测试通过 `tests/test_bili_activity.py` 的 fixtures 加载 |
-| `docs/` | 设计、部署、踩坑和验收记录 |
-| `lib/dafeiyu-shared/` | 伽拉忒亚：记忆系统与 TRPG 插件共用的 `shared.agentloop` / `shared.observability`，pytest 测试在 `shared/tests/` |
-| `persona/伽拉忒亚-*.md` | 伽拉忒亚人设与人格提示词；上游 `persona/大肥鱼-人格.md` 保留不动 |
+| `plugin/astrbot_plugin_face_convert/` | QQ 出站整形、入站媒体处理、身份标记（线上在用） |
+| `plugin/astrbot_plugin_chat_rhythm/` | 私聊连发合并、纯表情包按概率不回（线上在用） |
+| `plugin/astrbot_plugin_schedule_awareness/` | 定时任务注入（线上在用） |
+| `plugin/astrbot_plugin_affective_core/` | 情感状态、牵挂账本、表达桥；独立 `affective.db`（未部署，计划以后部署） |
+| `deploy-windows/` | Windows 部署套件：compose、首次部署、日常启停、数据卷迁移、掉线监控 |
+| `deploy/patches/` | AstrBot v4.29.0 核心补丁（整文件替换，bind-mount） |
+| `deploy/Dockerfile`、`deploy/heal_ws.py` | AstrBot 镜像；NapCat 备用时的 WS 自愈 |
+| `tests/` | unittest 回归 |
+| `docs/` | 部署、踩坑、知识库和导入说明 |
+| `lib/dafeiyu-shared/` | `shared.agentloop` / `shared.observability`，留给 TRPG 插件；pytest 测试在 `shared/tests/` |
+| `persona/` | 人设、人格提示词、课程文件；上游 `大肥鱼-人格.md` 保留不动（作为 AstrBot 里的备用人格） |
+
+长期记忆用开源插件 LivingMemory，群聊用 group_chat_plus，都不在本仓库；它们的线上配置与本地补丁记在 `CHANGELOG.md`。
 
 ## 3. 硬性不变量
-
-### 目标、好奇心、持有念头
-
-- 目标/好奇心是状态机。业务完成必须有显式动作和证据，不能因为 `status == "completed"`、活动正常结束或模型写了总结就推断完成。
-- 跨日小疑问只能通过 `df_curiosity_resolve` 显式解决；普通 `df_goal update completed` 不能完成它。
-- 来源必须保存稳定身份：episode id、`source_id`、`bvid`、`video_key` 等。只保存 `origin_id` 不够；重读原始来源不能算“新证据”。
-- 所有进入 `active` 的路径都要检查 active cap（包括 `running -> active`、`ready -> active`、`paused -> active`），不能只测一个分支。
-- “没有新来源却要解决”必须计数并返回明确结果，不能先抛异常后丢计数，也不能用 `logger.debug` 静默吞掉。
-- 测试必须覆盖真实入口（如 run-end），不能只直接调用内部 `resolve()` 来代替整条链路。
 
 ### Affective core
 
@@ -46,11 +40,10 @@
 - `expression_profile(None)` 是中性状态，消费方必须保留用户配置/插件默认，不要把 `None` 当 `1.0`、`3` 或 `8`。
 - 旧 `astrbot_plugin_emotionai` 未停用前不要启用新 affective core；两套 hook 会双注入。
 
-### Observatory
+### 核心补丁
 
-- 情感库只读：`mode=ro`、`PRAGMA query_only=ON`、SQLite authorizer 白名单；观测台任何代码不得写 `affective.db`。
-- 每条语句有 deadline；数值 clamp、字符串清理、跨 scope 隔离不能省。
-- 房间/星海的前端数据是展示数据，不代表新事实，不能反向写成记忆或用户偏好。
+- 补丁钉 AstrBot v4.29.0，是整文件替换；核心文件里只加最小调用，逻辑放插件里。回调异常吞掉记日志，不得影响发送和流水线。
+- 升级 AstrBot 时在新版文件上重打，不沿用旧文件。
 
 ### 媒体与网络
 
@@ -87,10 +80,10 @@
 python -m unittest discover -s tests -p "test_*.py" -q
 
 # 单个模块（需要让 tests/ 可导入）
-PYTHONPATH=tests python -m unittest test_bili_curiosity_goals -v
+PYTHONPATH=tests python -m unittest test_face_rules -v
 
 # 语法检查
-python -m py_compile plugin/astrbot_plugin_bili_activity/*.py
+python -m py_compile plugin/astrbot_plugin_face_convert/*.py
 ```
 
 Windows PowerShell 使用：
@@ -100,15 +93,14 @@ $env:PYTHONPATH = "tests"
 python -m unittest discover -s tests -p "test_*.py" -q
 ```
 
-如果当前 `python` 缺少 `mcp`、`Pillow` 等依赖，使用维护者测试 venv 或 `release.py status` 打印的“测试解释器”；不要用缺依赖的环境跑完后声称通过。
+如果当前 `python` 缺少依赖，先装齐或换有依赖的解释器；不要用缺依赖的环境跑完后声称通过。
 
-发布/部署走 `dafeiyu-release` 流水线：preflight 必须全过（含全量测试与 SSH 检查），部署只能从 `main` 且必须得到主人明确授权；部署会重启 `astrbot` 容器约 1–4 分钟。
+部署在本机 Docker Desktop 上，只能从 `main` 部署，且必须得到搭档明确授权；重建或重启 `astrbot` 容器会让机器人离线约 1 分钟。
 
 ## 6. 禁止事项
 
 - 不把 API key、密码、QQ 号、公网 IP、B站 UID 写入代码、测试、日志或提交。
-- 不提交 `.life-pilot/`、本地数据库、截图和临时文件。
-- 不修改 `docs/聊天回归基线.md`，除非任务明确要求。
+- 不提交本地数据库、`deploy-windows/data/`、截图和临时文件。
 - 不删除或覆盖别人的 worktree、分支、未提交改动。
 - 不自动合并 PR、不自动打 tag、不自动创建 GitHub Release、不从 feature 分支部署。
 - 不用“已修复”“测试通过”代替证据；失败就贴原始输出。

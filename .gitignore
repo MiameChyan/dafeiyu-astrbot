@@ -8,8 +8,6 @@ __pycache__/
 .life-pilot/
 .env
 payload/
-deploy-macos/data/
-deploy-macos/napcat/
 lib/**/build/
 lib/**/*.egg-info/
 lib/**/uv.lock

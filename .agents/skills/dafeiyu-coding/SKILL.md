@@ -2,9 +2,9 @@
 name: dafeiyu-coding
 description: >-
   Use this skill for implementation, bug-fix, refactor, or test work in the
-  dafeiyu-astrbot repository, especially AstrBot plugin state machines (goals,
-  curiosity, held thoughts), affective-core persistence, observatory read-only
-  projections, and release/deploy changes.
+  dafeiyu-astrbot repository, especially AstrBot plugins (face_convert,
+  chat_rhythm, schedule_awareness, affective-core persistence), AstrBot core
+  patches, and the Windows deploy kit.
 ---
 
 # 大肥鱼编码流程
@@ -13,10 +13,11 @@ description: >-
 
 ## 适用场景
 
-- 修 `plugin/astrbot_plugin_bili_activity/` 的目标、好奇心、持有念头、表达、计划器。
-- 改 `plugin/astrbot_plugin_affective_core/` 的状态、锁、bridge、记忆/表达接线。
-- 改 `deploy/memory_observatory/` 的只读观测、房间、星海。
-- 任何会影响云端部署、QQ 行为、账号操作或记忆写入的改动。
+- 改 `plugin/` 下的插件：face_convert 的出站整形与入站转述、chat_rhythm 的连发合并、schedule_awareness 的注入。
+- 改 `plugin/astrbot_plugin_affective_core/` 的状态、锁、bridge、表达接线。
+- 改 `deploy/patches/` 的 AstrBot 核心补丁（钉 v4.29.0，整文件替换）。
+- 改 `deploy-windows/` 的启停、监控、compose。
+- 任何会影响线上部署、QQ 行为、账号操作或记忆写入的改动。
 
 ## Gate 0：只读侦察
 
@@ -76,13 +77,13 @@ description: >-
 
 ```bash
 # 目标测试
-PYTHONPATH=tests python -m unittest test_bili_curiosity_goals -v
+PYTHONPATH=tests python -m unittest test_face_rules -v
 
 # 全量
 python -m unittest discover -s tests -p "test_*.py" -q
 
 # 语法
-python -m py_compile plugin/astrbot_plugin_bili_activity/*.py
+python -m py_compile plugin/astrbot_plugin_face_convert/*.py
 ```
 
 Windows PowerShell：
@@ -92,7 +93,7 @@ $env:PYTHONPATH = "tests"
 python -m unittest discover -s tests -p "test_*.py" -q
 ```
 
-如果缺依赖，使用 `release.py status` 打印的测试解释器；禁止在缺依赖环境跑测试后声称通过。
+禁止在缺依赖环境跑测试后声称通过。
 
 交付时给出：
 
@@ -107,21 +108,16 @@ changed files:
 
 ## 本仓库专项检查
 
-### 好奇心 / 持有念头
-
-- 完成只能走 `df_curiosity_resolve`；`df_goal` 不能把跨日小疑问标完成。
-- run-end 只记录尝试，不自动完成；活动正常结束不是解决。
-- 原始来源基线要包含 episode id、`source_id`、`bvid`/`video_key`；重读原来源必须被排除。
-- 无新来源的解决要计数并保存 `last_conclusion`，不能丢结论。
-- 上限检查覆盖所有进入 `active` 的路径；cap-evicted 暂停要有恢复路径；总目标数有上限。
-- 测试必须覆盖真实 run-end 路径，而不是手工调用内部方法。
-
 ### Affective core
 
 - `Store._lock` / `transaction()` 边界要覆盖所有 DB 访问；新增跨线程路径要测。
 - bridge 生产路径：`data.plugins.astrbot_plugin_affective_core`。
 - 中性 profile 的 `None` 不能覆盖用户 TTS/气泡/表情配置。
-- 观测台只读：`mode=ro`、`query_only=ON`、authorizer 白名单；任何写入都是 bug。
+
+### 核心补丁
+
+- 补丁是 v4.29.0 整文件替换：改动只加最小的调用，逻辑放插件里；回调异常吞掉记日志，不影响发送和流水线。
+- 补丁测试用桩模块直接执行补丁文件（见 `tests/test_dafeiyu_hooks.py`），换回原文件时测试要失败。
 
 ### 媒体
 

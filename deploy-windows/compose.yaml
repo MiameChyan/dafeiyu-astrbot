@@ -2,7 +2,7 @@
 #
 # 用法：powershell -ExecutionPolicy Bypass -File deploy-windows\start.ps1
 # 约定：宿主路径都相对本文件；端口 / 时区 / QQ 号走同目录 .env。
-# 依赖：镜像构建复用 ../deploy/Dockerfile，核心补丁复用 ../deploy/patches/（与 deploy-macos 相同做法）。
+# 依赖：镜像构建用 ../deploy/Dockerfile，核心补丁用 ../deploy/patches/。
 name: dafeiyu-windows
 
 services:
@@ -38,10 +38,6 @@ services:
       # 插件的数据库在 data/plugin_data，留在卷里。
       - ./data/plugins:/AstrBot/data/plugins
       - ./data/config:/AstrBot/data/config
-      # 记忆插件（astrbot_plugin_memory_core）的记忆文件：Markdown + 独立 git 仓库，放宿主机方便
-      # 直接查看、修改（插件会轮询发现手改，9p 挂载收不到文件事件）。它的 events.db / index.db
-      # 是 SQLite，留在上面的数据卷里，不能挪到这里。不用记忆插件时这个目录一直是空的。
-      - ${MEMORY_DIR:-./memory}:/AstrBot/data/plugin_data/astrbot_plugin_memory_core/memory
       # 核心补丁（AstrBot v4.29.0 源码修改版），只读 bind-mount，升级镜像不丢。
       # 只要基础聊天时注释掉下面四行。
       - ../deploy/patches/dashscope_tts.py:/AstrBot/astrbot/core/provider/sources/dashscope_tts.py:ro
