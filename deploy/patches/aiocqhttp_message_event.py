@@ -50,6 +50,17 @@ except ImportError:
     _dafeiyu_hooks = None
 
 
+def _capture_send_result(result) -> None:
+    if _dafeiyu_hooks is None:
+        return
+    try:
+        capture = getattr(_dafeiyu_hooks, "capture_send_result", None)
+        if capture is not None:
+            capture(result)
+    except Exception:
+        logger.warning("dafeiyu_hooks send receipt failed, ignored")
+
+
 def _emit_outbound(is_group: bool, session_id, message_chain) -> None:
     if _dafeiyu_hooks is None:
         return
@@ -147,23 +158,25 @@ class AiocqhttpMessageEvent(AstrMessageEvent):
 
         await _outbound_gate()
         if is_group and isinstance(session_id_int, int):
-            await bot.send_group_msg(
+            result = await bot.send_group_msg(
                 group_id=session_id_int,
                 message=messages,
                 **routing_params,
             )
         elif not is_group and isinstance(session_id_int, int):
-            await bot.send_private_msg(
+            result = await bot.send_private_msg(
                 user_id=session_id_int,
                 message=messages,
                 **routing_params,
             )
         elif isinstance(event, Event):  # 最后兜底
-            await bot.send(event=event, message=messages)
+            result = await bot.send(event=event, message=messages)
         else:
             raise ValueError(
                 f"无法发送消息：缺少有效的数字 session_id({session_id}) 或 event({event})",
             )
+
+        _capture_send_result(result)
 
     @classmethod
     async def send_message(
@@ -210,14 +223,16 @@ class AiocqhttpMessageEvent(AstrMessageEvent):
                     if isinstance(event, Event) and event.get("self_id"):
                         payload["self_id"] = event["self_id"]
                     await _outbound_gate()
-                    await bot.call_action("send_group_forward_msg", **payload)
+                    result = await bot.call_action("send_group_forward_msg", **payload)
+                    _capture_send_result(result)
                     sent = True
                 else:
                     payload["user_id"] = session_id
                     if isinstance(event, Event) and event.get("self_id"):
                         payload["self_id"] = event["self_id"]
                     await _outbound_gate()
-                    await bot.call_action("send_private_forward_msg", **payload)
+                    result = await bot.call_action("send_private_forward_msg", **payload)
+                    _capture_send_result(result)
                     sent = True
             elif isinstance(seg, File):
                 d = await cls._from_segment_to_dict(seg)
