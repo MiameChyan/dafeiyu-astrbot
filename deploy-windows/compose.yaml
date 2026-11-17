@@ -51,6 +51,8 @@ services:
       # 在上面的 aiocqhttp_message_event.py 里。没有插件注册回调时什么也不做。
       - ../deploy/patches/dafeiyu_hooks.py:/AstrBot/astrbot/core/dafeiyu_hooks.py:ro
       - ../deploy/patches/waking_check_stage.py:/AstrBot/astrbot/core/pipeline/waking_check/stage.py:ro
+      # 限流只数真正的消息：“正在输入”等通知事件不计数、不排队
+      - ../deploy/patches/rate_limit_stage.py:/AstrBot/astrbot/core/pipeline/rate_limit_check/stage.py:ro
     environment:
       - TZ=${TZ:-Asia/Shanghai}
 
