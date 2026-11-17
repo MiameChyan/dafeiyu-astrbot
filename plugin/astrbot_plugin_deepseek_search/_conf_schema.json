@@ -1,0 +1,7 @@
+{
+  "provider_id": {"type": "string", "default": "deepseek/deepseek-flash", "description": "复用哪个 DeepSeek 提供商的 Key", "hint": "填 AstrBot「服务提供商」里 DeepSeek 对话模型的 ID。插件用它的 Key 和 api_base 调用搜索接口，自己不存密钥。"},
+  "result_count": {"type": "int", "default": 5, "description": "每次返回几条结果", "hint": "1 到 10。条数不影响单价，但越多越占上下文。"},
+  "max_chars_per_result": {"type": "int", "default": 500, "description": "每条结果最多多少字", "hint": "100 到 2000。用的是接口给模型读的 summary 字段。"},
+  "daily_limit": {"type": "int", "default": 200, "description": "每天最多搜几次", "hint": "0 表示不限。每 1000 次成功搜索约 0.75 美元。计数只在内存里，重启清零。"},
+  "timeout_seconds": {"type": "float", "default": 15, "description": "超时秒数", "hint": "3 到 60。"}
+}
