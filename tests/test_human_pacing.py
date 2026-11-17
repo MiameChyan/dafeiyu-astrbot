@@ -233,13 +233,17 @@ class LimiterTests(unittest.TestCase):
 class WiringTests(unittest.TestCase):
     """补丁文件和挂载点要对得上：respond_stage / aiocqhttp 都按这个路径导入。"""
 
-    def test_windows_compose_mounts_pacing_patches(self):
+    def test_windows_compose_keeps_pacing_disabled_but_restorable(self):
+        # 2026-11-17 起停用拟人节奏（群聊节奏交给 group_chat_plus）：挂载行保留为注释，
+        # 方便恢复；aiocqhttp 补丁仍要挂载（它同时是出站挂钩点）。
         with open(os.path.join(ROOT, "deploy-windows", "compose.yaml"), encoding="utf-8") as f:
-            compose = f.read()
-        self.assertIn(
-            "../deploy/patches/human_pacing.py:/AstrBot/astrbot/core/utils/human_pacing.py:ro",
-            compose,
-        )
+            lines = f.read().splitlines()
+        mount = "../deploy/patches/human_pacing.py:/AstrBot/astrbot/core/utils/human_pacing.py:ro"
+        active = [l for l in lines if mount in l and not l.lstrip().startswith("#")]
+        commented = [l for l in lines if mount in l and l.lstrip().startswith("#")]
+        self.assertEqual(active, [], "拟人节奏应保持停用")
+        self.assertEqual(len(commented), 1, "保留一行注释掉的挂载，方便恢复")
+        compose = "\n".join(lines)
         self.assertIn(
             "../deploy/patches/aiocqhttp_message_event.py:"
             "/AstrBot/astrbot/core/platform/sources/aiocqhttp/aiocqhttp_message_event.py:ro",
