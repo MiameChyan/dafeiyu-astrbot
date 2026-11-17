@@ -240,7 +240,7 @@ function LaunchOpenQQ([string]$Dir) {
     $quoted = $Dir.Replace("'", "''")
     $command = "`$Host.UI.RawUI.WindowTitle = 'OpenQQ（大肥鱼协议端，别关）'; Set-Location -LiteralPath '$quoted'; node src/main.mjs start"
     Say '在新窗口启动 OpenQQ（这个窗口要一直开着）'
-    $null = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoExit', '-NoProfile', '-Command', $command) `
+    Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoExit', '-NoProfile', '-Command', $command) `
         -WorkingDirectory $Dir -WindowStyle Normal -PassThru
 }
 
@@ -252,23 +252,35 @@ function EnsureOpenQQ([string]$AstrId) {
         return $false
     }
     $since = $null
-    if (OpenQQProcess) {
+    $launcher = $null
+    $seenProcess = [bool](OpenQQProcess)
+    if ($seenProcess) {
         Say 'OpenQQ 已在运行'
     } else {
         $since = [DateTime]::UtcNow.AddSeconds(-2)
-        LaunchOpenQQ $dir
+        $launcher = LaunchOpenQQ $dir
         Write-Host '    在 OpenQQ 拉起的 QQ 里登录大肥鱼的小号；需要主号的话，等登录完再另开 QQ。'
     }
     Say "等待 QQ 登录完成（最多 $LoginTimeoutSeconds 秒）"
     $deadline = [DateTime]::UtcNow.AddSeconds($LoginTimeoutSeconds)
+    # 新 PowerShell 窗口是异步启动的，Node 不会立即出现；启动等待不延长总登录预算。
+    $startupDeadline = [DateTime]::UtcNow.AddSeconds([Math]::Min(30, $LoginTimeoutSeconds))
     while ($true) {
         $status = OpenQQStatus $dir
         $fresh = $status -and ($null -eq $since -or ($status.Updated -and $status.Updated -ge $since))
-        if ($fresh -and $status.Phase -eq 'session_ready') { break }
         if ($fresh -and $openQQFailed.ContainsKey($status.Phase)) {
             throw "$($openQQFailed[$status.Phase])。看一下 OpenQQ 窗口；被踢下线就在它拉起的 QQ 里重新登录，然后重新运行启动脚本。"
         }
-        if ($null -ne $since -and -not (OpenQQProcess)) { throw 'OpenQQ 窗口退出了，请查看报错后重新运行启动脚本。' }
+        $process = OpenQQProcess
+        if ($process) {
+            $seenProcess = $true
+            # 状态文件不能代替实际进程，避免读取到刚退出的旧实例留下的 ready。
+            if ($fresh -and $status.Phase -eq 'session_ready') { break }
+        } elseif ($seenProcess -or ($launcher -and $launcher.HasExited)) {
+            throw 'OpenQQ 窗口退出了，请查看报错后重新运行启动脚本。'
+        } elseif ([DateTime]::UtcNow -ge $startupDeadline) {
+            throw '未检测到 OpenQQ 进程启动，请检查新窗口里的 Node 报错后重新运行启动脚本。'
+        }
         if ([DateTime]::UtcNow -ge $deadline) {
             throw "$LoginTimeoutSeconds 秒内没等到 QQ 登录完成。登录好之后重新运行启动脚本即可（不会重复拉起 OpenQQ）。"
         }

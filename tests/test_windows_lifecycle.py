@@ -30,6 +30,8 @@ $global:DFTestAstrExists = -not ($cfg.missing -eq 'astrbot')
 $global:DFTestNapRunning = [bool]$cfg.napRunning
 $global:DFTestStoppedAstr = $false
 $global:DFTestOpenQQ = [bool]$cfg.openqqRunning
+$global:DFTestOpenQQLaunched = $false
+$global:DFTestOpenQQProbes = 0
 $statusPath = Join-Path $env:DF_TEST_OPENQQ '.runtime\status.json'
 function Record($kind, $value) {
     @{kind=$kind; value=$value} | ConvertTo-Json -Compress -Depth 6 |
@@ -137,6 +139,17 @@ function Get-Process {
 function Get-CimInstance {
     param($ClassName, $Filter, $ErrorAction)
     if ($Filter -like "Name = 'node.exe'*") {
+        if ($global:DFTestOpenQQLaunched) {
+            $global:DFTestOpenQQProbes++
+            if ($cfg.openqqStartDelayQueries -and $global:DFTestOpenQQProbes -ge $cfg.openqqStartDelayQueries) {
+                $global:DFTestOpenQQ = $true
+                if ($cfg.loginPhase) { WriteStatus $cfg.loginPhase }
+            }
+            if ($cfg.openqqExitAfterQueries -and $global:DFTestOpenQQProbes -ge $cfg.openqqExitAfterQueries) {
+                $global:DFTestOpenQQ = $false
+            }
+        }
+        Record 'openqq-probe' @{present=$global:DFTestOpenQQ; afterLaunch=$global:DFTestOpenQQLaunched}
         if ($global:DFTestOpenQQ) {
             [pscustomobject]@{ProcessId=5555; CommandLine='"node.exe" src/main.mjs start'}
         }
@@ -158,8 +171,11 @@ function Start-Process {
     param($FilePath, $ArgumentList, $WorkingDirectory, $WindowStyle, [switch]$PassThru)
     Record 'start-process' @{path=$FilePath; args=@($ArgumentList); style=$WindowStyle; cwd=$WorkingDirectory}
     if ($FilePath -eq 'powershell.exe') {
-        $global:DFTestOpenQQ = -not $cfg.openqqDies
-        if ($cfg.loginPhase) { WriteStatus $cfg.loginPhase }
+        $global:DFTestOpenQQLaunched = $true
+        $global:DFTestOpenQQProbes = 0
+        $global:DFTestOpenQQ = -not ($cfg.openqqDies -or $cfg.openqqNeverStarts -or $cfg.openqqStartDelayQueries)
+        if ($cfg.loginPhase -and ($global:DFTestOpenQQ -or $cfg.earlyReady)) { WriteStatus $cfg.loginPhase }
+        return [pscustomobject]@{Id=4242; HasExited=[bool]$cfg.openqqDies}
     }
     [pscustomobject]@{Id=4242}
 }
@@ -431,6 +447,49 @@ class WindowsLifecycleTests(unittest.TestCase):
         # 监控在登录完成之后才启动
         kinds = [(e["kind"], e["value"].get("path") if isinstance(e["value"], dict) else None) for e in events]
         self.assertLess(kinds.index(("start-process", "powershell.exe")), kinds.index(("start-process", "pythonw.exe")))
+
+    def test_delayed_node_start_reaches_login_and_starts_monitor_once(self):
+        # 窗口已经创建，前三次查询后 Node 才出现；真实入口不能立即误报退出。
+        result, events = self.run_case("Start", python=True, openqqRunning=False,
+                                       statusPhase="starting", openqqStartDelayQueries=3,
+                                       loginPhase="session_ready")
+        self.assert_ok(result)
+        self.assertEqual(len(self.launches(events, "powershell.exe")), 1)
+        self.assertEqual(len(self.launches(events, "pythonw.exe")), 1)
+        probes = [e["value"]["present"] for e in events
+                  if e["kind"] == "openqq-probe" and e["value"]["afterLaunch"]]
+        # 状态读取与进程查询不是原子操作，允许 ready 在下一轮才被读取。
+        self.assertEqual(probes[:3], [False, False, True])
+        self.assertTrue(all(probes[2:]))
+
+    def test_fresh_ready_status_still_requires_running_openqq_process(self):
+        # 新状态文件不能代替进程已启动；监控必须等到进程实际出现。
+        result, events = self.run_case("Start", python=True, openqqRunning=False,
+                                       statusPhase="starting", openqqStartDelayQueries=3,
+                                       loginPhase="session_ready", earlyReady=True)
+        self.assert_ok(result)
+        probes = [e["value"]["present"] for e in events if e["kind"] == "openqq-probe"]
+        self.assertTrue(probes[-1])
+        self.assertEqual(len(self.launches(events, "pythonw.exe")), 1)
+
+    def test_never_started_node_times_out_without_claiming_window_exited(self):
+        result, events = self.run_case("Start", python=True, openqqRunning=False,
+                                       openqqNeverStarts=True, statusPhase="starting")
+        self.assert_failed(result)
+        self.assertIn("未检测到 OpenQQ 进程启动", result.stdout + result.stderr)
+        self.assertNotIn("OpenQQ 窗口退出了", result.stdout + result.stderr)
+        self.assertFalse(self.launches(events, "pythonw.exe"))
+
+    def test_observed_node_exiting_before_login_is_failure(self):
+        result, events = self.run_case("Start", python=True, openqqRunning=False,
+                                       statusPhase="starting", openqqExitAfterQueries=2,
+                                       loginPhase="hook_installed")
+        self.assert_failed(result)
+        self.assertIn("OpenQQ 窗口退出了", result.stdout + result.stderr)
+        probes = [e["value"]["present"] for e in events
+                  if e["kind"] == "openqq-probe" and e["value"]["afterLaunch"]]
+        self.assertEqual(probes, [True, False])
+        self.assertFalse(self.launches(events, "pythonw.exe"))
 
     def test_stale_ready_status_from_previous_run_is_not_trusted(self):
         # status.json 还停在上次的 session_ready，新拉起的 OpenQQ 一直没写状态 → 应等到超时
