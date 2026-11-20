@@ -25,6 +25,12 @@
 - 新增 2 个真实发送补丁入口用例和 3 个 metadata 用例。旧基线上的分支全量 266 项，跳过 5、无失败。随后同步用户合并的 #18/#19 到 c18edb4，新 main 基线 272 项，跳过 5、无失败；最终复验由 CC 接手。
 - 安装说明见 deploy/community_patches/README.md。开发分支补丁尚未应用线上；实际读回、召回和真实群行为待主分支安装后验收。
 
+## 未发布 · 补齐 LivingMemory 图谱依赖（2026-11-17）
+
+- LivingMemory 的 `networkx` 延迟到图谱页面请求时才导入，缺少依赖时插件能加载，图谱页却报 `No module named 'networkx'`。镜像构建补装插件声明的 `networkx>=3.0,<4`，避免仅在容器内手动安装后随容器重建丢失。
+- 当前运行容器已单独补装依赖；镜像变更需合入主线并在后续构建时生效。
+- 验证：补装前真实 `GraphHandler._assign_communities` 复现缺模块；补装后空图、孤立节点及连接节点分组通过，运行中图谱概览接口 HTTP 200 / `status=ok`，`pip check` 通过。独立测试镜像构建通过；`python -m unittest discover -s tests -p "test_*.py" -q` 退出码 0，共 272 项、跳过 5 项。
+
 ## 未发布 · 停用拟人节奏补丁（2026-11-17）
 
 - 搭档决定：群聊里拟人节奏和 group_chat_plus 的回复延迟模拟重复，关掉我们这边。`deploy-windows/compose.yaml` 注释掉 `human_pacing.py` 的挂载，补丁文件和测试保留，取消注释、重建容器即可恢复。
