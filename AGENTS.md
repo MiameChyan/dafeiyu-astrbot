@@ -20,6 +20,7 @@
 | `plugin/astrbot_plugin_face_convert/` | QQ 出站整形、入站媒体处理、身份标记（线上在用） |
 | `plugin/astrbot_plugin_chat_rhythm/` | 私聊连发合并、纯表情包按概率不回（线上在用） |
 | `plugin/astrbot_plugin_schedule_awareness/` | 定时任务注入（线上在用） |
+| `plugin/astrbot_plugin_reach_out/` | 主动联系：私信搭档、白名单授权的私聊/群；独立 `state.json`（未部署） |
 | `plugin/astrbot_plugin_affective_core/` | 情感状态、牵挂账本、表达桥；独立 `affective.db`（未部署，计划以后部署） |
 | `deploy-windows/` | Windows 部署套件：compose、首次部署、日常启停、数据卷迁移、掉线监控 |
 | `deploy/patches/` | AstrBot v4.29.0 核心补丁（整文件替换，bind-mount） |

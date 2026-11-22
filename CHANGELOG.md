@@ -1,5 +1,17 @@
 # 📜 更新日志
 
+## 未发布 · 主动联系插件 astrbot_plugin_reach_out（2026-11-23）
+
+- 新插件 `plugin/astrbot_plugin_reach_out/`，给她三个工具：`message_partner`（在任何会话里私信搭档，即 `admins_id` 里的号码）、`message_contact`（给授权过的人私聊或往授权过的群发消息）、`list_contacts`（查名单）。AstrBot 自带的 `send_message_to_user` 只在搭档本人触发时才能跨会话，而且她不知道目标会话怎么写，所以单独做。
+- 搭档命令（仅管理员）：`/授权 私聊|群 <号码> [备注] [天数] [条数]`（天数默认 7，0 = 永久；条数 0 = 不限；`7天`、`5条` 带单位时顺序随意）、`/撤销授权 私聊|群 <号码>`、`/授权列表`。白名单之外的目标一律拒绝。
+- 限流（可配置）：私信搭档每小时 6 次、每天 20 次；授权目标所有目标合计每小时 10 条、每个目标每天 10 条；10 分钟内同一目标的相同内容不重复发。先占额度再发，发失败退回额度；发给授权目标默认抄送搭档。
+- 发出的话记为“最近外发”，之后那个会话请求模型时，作为临时提示追加到 system_prompt 里（72 小时内最多 5 条），让她记得自己主动说过什么；不改对话历史，避免和那个会话正在进行的回合抢写。
+- 状态存放在 `plugin_data/astrbot_plugin_reach_out/state.json`（授权、近 2 天的发送记录、最近外发），原子写入；文件损坏时移到 `.corrupt-<时间>`，然后从空状态开始。
+- 人格提示词 v0.10：【边界】新增“主动联系”一条。
+- 验证：`tests/test_reach_out.py` 34 项。其中一项抓到了真实问题：最后一条额度扣完后，授权被撤销，这时发送失败退款，会把授权复活。已改为占用计数（inflight）加 commit/refund 两步。
+- 线上（2026-11-23）：插件已复制到 `deploy-windows/data/plugins/`；人格 v0.10 已写入 `personas`（`伽拉忒亚`，`tools` 为 null，不限工具）；写入前线上内容与 v0.9 逐字一致，整库备份为数据卷里的 `data_v4.before_persona_v010.db`。只重启了 AstrBot 容器，日志确认三个工具已注册，OneBot 已重新连上。重启打断了群 630569324 正在生成的一条回复，AstrBot 试图往群里发报错文字时适配器已经关闭，那次发送本身报了异常。
+- 待线上验证：对方不是 QQ 好友时私聊能否发出（OpenQQ）；group_chat_plus 群聊路径上是否经过 on_llm_request 注入；发出的消息不经过 face_convert，所以要求只发纯文字。
+
 ## 未发布 · 联网搜索兜底插件 astrbot_plugin_deepseek_search（2026-11-18）
 
 - 新插件 `plugin/astrbot_plugin_deepseek_search/`：注册一个 `search_web` 工具，调用 DeepSeek Search API（`POST /v1/tools/search`，2026-11-13 上线，每 1000 次成功请求 0.75 美元，空结果、失败不计费）。AstrBot 4.29 自带的联网搜索没有 DeepSeek 这个选项，所以自己写；线上 `web_search` 保持关闭，避免出现两个搜索工具。
