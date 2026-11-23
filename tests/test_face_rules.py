@@ -298,6 +298,16 @@ asyncio.run(plugin.inbound_face_to_text(ev))
 asyncio.run(plugin.inbound_face_to_text(ev))
 check("identity-tag: no-double", ev.message_str == "[搭档(123456)] 在吗", repr(ev.message_str))
 
+# reach_out 构造的念头：私聊时发送者是对方本人（甚至是搭档），也不能标成对方说的
+for label, ev in (
+    ("thought-private-admin", _InEvent("123456", "伽拉忒亚的念头", private=True, text="（念头）")),
+    ("thought-private-guest", _InEvent("333", "伽拉忒亚的念头", private=True, text="（念头）")),
+    ("thought-group", _InEvent("0", "伽拉忒亚的念头", group="g1", text="（念头）")),
+):
+    ev.set_extra("reach_out_thought", True)
+    asyncio.run(plugin.inbound_face_to_text(ev))
+    check("identity-tag: " + label, ev.message_str == "[你自己的念头] （念头）", repr(ev.message_str))
+
 # 私聊空消息不补「喊了你一声」（那是群聊专用）
 ev = _InEvent("123456", "主号", private=True, text="")
 asyncio.run(plugin.inbound_face_to_text(ev))

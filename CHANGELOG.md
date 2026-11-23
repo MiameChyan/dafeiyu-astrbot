@@ -1,5 +1,21 @@
 # 📜 更新日志
 
+## 未发布 · 主动联系 v2：走过去说、近况、对话里授权、群聊等说完再回（2026-11-23）
+
+- 起因：搭档反馈 v1 不像她本人在说话（工具往别处扔纯文字，不能发表情包），而且她不知道别处刚发生了什么。设计见 `docs/计划-持续存在感.md` 第 1 步。
+- `astrbot_plugin_reach_out` v2：
+  - 删除 `message_partner` / `message_contact`，改为 `go_talk(where, target_id, intent)`。插件在目标会话里构造一条“她自己的念头”，经 `platform.create_event` → `commit_event` 送进正常流水线，她在那边看着那边的聊天自己开口：分条发送、表情转换、表情包工具、写对话历史、LivingMemory 记忆都和平常一样。群里的念头带一个 @她 的组件，由 AstrBot 原生唤醒，发送者是占位号（默认 `0`，昵称“伽拉忒亚的念头”）；私聊时发送者只能是对方本人。
+  - 念头那一轮不能再 `go_talk`，也不能授权（防循环、防借念头提权）。念头事件另设 `_api_key_allow_admin_role=False`：私聊念头的发送者是对方本人（去搭档私聊时就是搭档的号），不禁掉的话 AstrBot 会把这一轮判成管理员，群友就能借“去跟搭档说……”拿到管理员工具（自审时发现，测试先红后绿）。投递在后台延迟 2 秒执行；失败时退回额度，并记一条“没去成”的近况。
+  - 新增 `grant_contact` / `revoke_contact`：代码只认搭档本人发起的一轮（不是念头、`role == admin`、发送者在 `admins_id` 里）。三条 `/授权` 命令保留。
+  - 近况：`on_llm_request` 记下“谁在哪说了什么”；核心补丁的出站回调 `register_outbound` 记下“我说了什么”（只有 QQ 发送成功才算，同一回复的几个气泡合并成一条）。保留 6 小时、最多 30 条，注入到别的会话。隐私规则写在代码里：搭档私聊看全部；其他人私聊只看群；群里只看群，私聊只说“和谁私聊过”，不带内容。时间一律按北京时间显示。
+  - 状态文件升到 v2（`recent` 取代 v1 的 `notes`）；v1 文件能直接读，授权保留。
+- 核心补丁 `deploy/patches/stage.py`：念头消息不加 @、不加引用（`can_decorate` 多一个判断）。念头没有真实的消息 ID，引用它的话 OpenQQ 会拒发（1404）。这偏离了计划里“不改核心补丁”，已在计划文档里注明。
+- `face_convert`：念头消息的身份标记一律是 `[你自己的念头]`。否则私聊里会被标成对方或搭档说的话。
+- `chat_rhythm`：念头消息直接放行，不和对方的连发拼在一起。
+- 人格提示词 v0.11：“主动联系”条改写为 go_talk、对话里授权、近况和念头的读法。
+- 群聊等说完再回：线上把 group_chat_plus 的 `enable_group_wait_window` 打开，`group_wait_window_timeout_ms` 设为 4000、`group_wait_window_max_extra_messages` 设为 5（配置不在仓库）。私聊沿用 chat_rhythm。
+- 验证：`tests/test_reach_out.py` 46 项；全量 346 项，跳过 5 项；`tests/test_chat_rhythm.py`、`tests/test_face_rules.py` 新增的念头用例都在旧代码上失败、新代码上通过。
+
 ## 未发布 · 主动联系插件 astrbot_plugin_reach_out（2026-11-23）
 
 - 新插件 `plugin/astrbot_plugin_reach_out/`，给她三个工具：`message_partner`（在任何会话里私信搭档，即 `admins_id` 里的号码）、`message_contact`（给授权过的人私聊或往授权过的群发消息）、`list_contacts`（查名单）。AstrBot 自带的 `send_message_to_user` 只在搭档本人触发时才能跨会话，而且她不知道目标会话怎么写，所以单独做。
@@ -9,7 +25,7 @@
 - 状态存放在 `plugin_data/astrbot_plugin_reach_out/state.json`（授权、近 2 天的发送记录、最近外发），原子写入；文件损坏时移到 `.corrupt-<时间>`，然后从空状态开始。
 - 人格提示词 v0.10：【边界】新增“主动联系”一条。
 - 验证：`tests/test_reach_out.py` 34 项。其中一项抓到了真实问题：最后一条额度扣完后，授权被撤销，这时发送失败退款，会把授权复活。已改为占用计数（inflight）加 commit/refund 两步。
-- 线上（2026-11-23）：插件已复制到 `deploy-windows/data/plugins/`；人格 v0.10 已写入 `personas`（`伽拉忒亚`，`tools` 为 null，不限工具）；写入前线上内容与 v0.9 逐字一致，整库备份为数据卷里的 `data_v4.before_persona_v010.db`。只重启了 AstrBot 容器，日志确认三个工具已注册，OneBot 已重新连上。重启打断了群 630569324 正在生成的一条回复，AstrBot 试图往群里发报错文字时适配器已经关闭，那次发送本身报了异常。
+- 线上（2026-11-23）：插件已复制到 `deploy-windows/data/plugins/`；人格 v0.10 已写入 `personas`（`伽拉忒亚`，`tools` 为 null，不限工具）；写入前线上内容与 v0.9 逐字一致，整库备份为数据卷里的 `data_v4.before_persona_v010.db`。只重启了 AstrBot 容器，日志确认三个工具已注册，OneBot 已重新连上。重启打断了一个群里正在生成的一条回复，AstrBot 试图往群里发报错文字时适配器已经关闭，那次发送本身报了异常。
 - 待线上验证：对方不是 QQ 好友时私聊能否发出（OpenQQ）；group_chat_plus 群聊路径上是否经过 on_llm_request 注入；发出的消息不经过 face_convert，所以要求只发纯文字。
 
 ## 未发布 · 联网搜索兜底插件 astrbot_plugin_deepseek_search（2026-11-18）

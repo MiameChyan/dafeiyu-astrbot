@@ -753,7 +753,10 @@ class FaceConvertPlugin(Star):
                 is_group = bool(event.get_group_id())
                 if is_group or event.is_private_chat():
                     name = re.sub(r"[\[\]\r\n]", "", (event.get_sender_name() or "").strip())[:16]
-                    if sid in self.admins:
+                    if event.get_extra("reach_out_thought"):
+                        # reach_out 构造的念头：私聊时发送者只能是对方本人，不能标成对方或搭档说的
+                        tag = "你自己的念头"
+                    elif sid in self.admins:
                         tag = f"搭档({sid})"
                     elif is_group:
                         tag = f"{name}({sid})" if name else f"群友({sid})"

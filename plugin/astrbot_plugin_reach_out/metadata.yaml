@@ -1,5 +1,5 @@
 name: astrbot_plugin_reach_out
 display_name: 大肥鱼的主动联系
-desc: 私信搭档（管理员）；给搭档用 /授权 加进白名单的人或群主动发消息，带有效期、条数和频率上限
-version: v1.0.0
+desc: 走过去说（在目标会话里像平常一样开口）、近况（知道别处刚发生了什么）、对话里授权；白名单、有效期、次数与频率上限
+version: v2.0.0
 author: dafeiyu-tools

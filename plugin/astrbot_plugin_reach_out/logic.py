@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""主动联系的纯逻辑：授权白名单、限流、去重、最近外发记录，以及 JSON 持久化。
+"""主动联系的纯逻辑：授权白名单、限流、去重、近况（跨会话经历）与隐私过滤，以及 JSON 持久化。
 
 不依赖 AstrBot，方便单测。所有会改状态的方法都在 asyncio.Lock 里做完“检查 + 修改 + 落盘”，
 发消息本身不在锁里：先 reserve（占额度），发失败再 refund（退额度）。
@@ -11,6 +11,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 USER = "user"
 GROUP = "group"
@@ -23,6 +24,26 @@ _ID_RE = re.compile(r"^\d{5,12}$")
 
 DAY = 86400
 HOUR = 3600
+SHANGHAI = timezone(timedelta(hours=8))  # 宿主机是 UTC+11，时间一律按北京时间显示
+_TAG_RE = re.compile(r"^\s*\[[^\[\]\r\n]{1,40}\]\s*")
+
+
+def hm(ts):
+    return datetime.fromtimestamp(float(ts), SHANGHAI).strftime("%H:%M")
+
+
+def md_hm(ts):
+    return datetime.fromtimestamp(float(ts), SHANGHAI).strftime("%m-%d %H:%M")
+
+
+def strip_tag(text):
+    """去掉 face_convert 加在开头的身份标记，如 "[搭档(123)] "。"""
+    return _TAG_RE.sub("", str(text or ""), count=1)
+
+
+def clip(text, n):
+    s = " ".join(str(text or "").split())
+    return s if len(s) <= n else s[: max(1, n - 1)] + "…"
 
 
 def normalize_kind(kind):
@@ -66,16 +87,18 @@ def _hash(text):
 @dataclass
 class Settings:
     platform_id: str = ""
-    max_text_len: int = 500
+    max_text_len: int = 300
     partner_per_hour: int = 6
     partner_per_day: int = 20
     contact_per_hour: int = 10
     contact_per_target_day: int = 10
     dedupe_minutes: int = 10
     default_grant_days: int = 7
-    cc_partner: bool = True
-    note_ttl_hours: int = 72
-    notes_per_session: int = 5
+    thought_delay_seconds: int = 2
+    thought_sender_id: str = "0"
+    recent_hours: int = 6
+    recent_max: int = 30
+    recent_inject_max: int = 12
 
     @classmethod
     def from_config(cls, cfg):
@@ -99,6 +122,8 @@ class Settings:
             setattr(s, name, v)
         if s.max_text_len < 1:
             s.max_text_len = 1
+        if not normalize_id(s.thought_sender_id) and s.thought_sender_id != "0":
+            s.thought_sender_id = "0"
         return s
 
 
@@ -150,7 +175,7 @@ def parse_grant_args(tokens, default_days):
 
 
 class Store:
-    """状态文件：grants（白名单）、sent（近 2 天的发送记录，用于限流和去重）、notes（最近外发，用于提示她）。"""
+    """状态文件：grants（白名单）、sent（近 2 天的发送记录，用于限流和去重）、recent（近况）。"""
 
     def __init__(self, path, settings, now=time.time, logger=None):
         self.path = path
@@ -162,7 +187,7 @@ class Store:
 
     # ---------- 持久化 ----------
     def _empty(self):
-        return {"version": 1, "grants": {}, "sent": [], "notes": {}}
+        return {"version": 2, "grants": {}, "sent": [], "recent": []}
 
     def _load(self):
         if not os.path.exists(self.path):
@@ -173,11 +198,11 @@ class Store:
             if not isinstance(data, dict):
                 raise ValueError("顶层不是对象")
             st = self._empty()
-            for k in ("grants", "notes"):
-                if isinstance(data.get(k), dict):
-                    st[k] = data[k]
-            if isinstance(data.get("sent"), list):
-                st["sent"] = [e for e in data["sent"] if isinstance(e, dict)]
+            if isinstance(data.get("grants"), dict):
+                st["grants"] = data["grants"]
+            for k in ("sent", "recent"):
+                if isinstance(data.get(k), list):
+                    st[k] = [e for e in data[k] if isinstance(e, dict)]
             return st
         except Exception as e:
             bad = f"{self.path}.corrupt-{int(self.now())}"
@@ -204,13 +229,9 @@ class Store:
             # 正在发送中的（inflight>0）先留着，发失败时要退条数
             if not self._grant_alive(g, now) and not int(g.get("inflight") or 0):
                 del self.state["grants"][k]
-        ttl = self.s.note_ttl_hours * HOUR
-        for umo, notes in list(self.state["notes"].items()):
-            keep = [n for n in notes if isinstance(n, dict) and now - float(n.get("ts", 0)) < ttl]
-            if keep:
-                self.state["notes"][umo] = keep[-self.s.notes_per_session:]
-            else:
-                del self.state["notes"][umo]
+        ttl = self.s.recent_hours * HOUR
+        self.state["recent"] = [e for e in self.state["recent"]
+                                if now - float(e.get("ts", 0)) < ttl][-self.s.recent_max:]
 
     @staticmethod
     def _grant_alive(g, now):
@@ -325,16 +346,59 @@ class Store:
             self._prune()
             self._save()
 
-    # ---------- 最近外发（提示她自己说过什么） ----------
-    async def add_note(self, umo, text):
+    # ---------- 近况 ----------
+    async def add_recent(self, key, place, who, text, merge_seconds=0):
+        """记一条近况。merge_seconds>0 时，同一会话同一说话人在这段时间内的连续几条合并成一条
+        （她的回复会分成几个气泡分别发出）。"""
+        text = str(text or "").strip()
+        if not text:
+            return
         async with self._lock:
-            self.state["notes"].setdefault(umo, []).append({"ts": self.now(), "text": text})
+            now = self.now()
+            rec = self.state["recent"]
+            last = rec[-1] if rec else None
+            if (merge_seconds and last and last.get("key") == key and last.get("who") == who
+                    and now - float(last.get("ts", 0)) <= merge_seconds):
+                last["text"] = clip(f"{last.get('text', '')} {text}", 120)
+                last["ts"] = now
+            else:
+                rec.append({"ts": now, "key": key, "place": place, "who": who, "text": clip(text, 120)})
             self._prune()
             self._save()
 
-    async def notes_for(self, umo):
+    async def recent(self):
         async with self._lock:
-            now = self.now()
-            ttl = self.s.note_ttl_hours * HOUR
-            notes = self.state["notes"].get(umo) or []
-            return [dict(n) for n in notes if now - float(n.get("ts", 0)) < ttl][-self.s.notes_per_session:]
+            self._prune()
+            return [dict(e) for e in self.state["recent"]]
+
+
+def render_recent(entries, current_key, viewer, partners, max_lines=12, text_len=60):
+    """把近况按隐私规则排成几行。
+
+    viewer: "partner"（和搭档私聊）/ "user"（和其他人私聊）/ "group"（群聊）。
+    - 当前会话自己的条目不注入（那边的聊天记录里本来就有）。
+    - 搭档私聊看全部。
+    - 其他人私聊：只看群里的事；任何私聊都不提。
+    - 群聊：群里的事看全文；私聊只说“和谁私聊过”，不带内容。
+    """
+    partners = set(partners or [])
+    lines = []
+    collapsed = {}
+    for e in entries:
+        key = str(e.get("key", ""))
+        if not key or key == current_key:
+            continue
+        private = key.startswith(USER + ":")
+        if private and viewer == "user":
+            continue
+        if private and viewer == "group":
+            pid = key.split(":", 1)[1]
+            label = "和搭档" if pid in partners else "和别人"
+            collapsed[key] = (float(e.get("ts", 0)), label)
+            continue
+        lines.append((float(e.get("ts", 0)),
+                      f"- {hm(e.get('ts', 0))} {e.get('place', '')} {e.get('who', '')}：{clip(e.get('text', ''), text_len)}"))
+    for key, (ts, label) in collapsed.items():
+        lines.append((ts, f"- {hm(ts)} {label}私聊过（内容不在这里说）"))
+    lines.sort(key=lambda x: x[0])
+    return [l for _, l in lines][-max_lines:]

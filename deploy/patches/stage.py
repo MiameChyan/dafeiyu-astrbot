@@ -487,7 +487,9 @@ class ResultDecorateStage(Stage):
                     result.chain = [node]
 
             # at 回复 / 引用回复仅适用于纯文本或图文消息
-            can_decorate = all(
+            # 大肥鱼：reach_out 插件构造的“念头”消息没有真实发送者和消息 ID，
+            # 不能 @ 占位发送者，也不能引用不存在的消息（OpenQQ 会拒发 1404）。
+            can_decorate = not event.get_extra("reach_out_thought") and all(
                 isinstance(item, (Plain, Image)) for item in result.chain
             )
             if can_decorate:
