@@ -1,5 +1,5 @@
 name: astrbot_plugin_reach_out
 display_name: 大肥鱼的存在感
-desc: 走过去说（在目标会话里像平常一样开口）、近况（知道别处刚发生了什么）、心事（惦记着的事）、对话里授权
-version: v2.1.0
+desc: 走过去说（在目标会话里像平常一样开口）、近况、心事、心跳（没人找她时偶尔想起来去找人）、对话里授权
+version: v2.2.0
 author: dafeiyu-tools

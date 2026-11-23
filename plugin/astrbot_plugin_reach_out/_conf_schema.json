@@ -134,5 +134,62 @@
   "type": "int",
   "default": 40,
   "description": "补漏：模型超时秒数"
+ },
+ "heartbeat_enabled": {
+  "type": "bool",
+  "default": true,
+  "description": "心跳：没人找她时，偶尔想起某件心事去找人"
+ },
+ "heartbeat_scope": {
+  "type": "string",
+  "default": "partner",
+  "description": "心跳能去找谁",
+  "hint": "partner = 只有搭档；partner+granted = 再加授权过的私聊。群不进心跳。"
+ },
+ "heartbeat_window": {
+  "type": "string",
+  "default": "09:30-23:30",
+  "description": "心跳时段（北京时间）"
+ },
+ "heartbeat_interval_minutes": {
+  "type": "int",
+  "default": 45,
+  "description": "心跳间隔（分钟）"
+ },
+ "heartbeat_daily_max": {
+  "type": "int",
+  "default": 2,
+  "description": "每天最多主动找人几次"
+ },
+ "heartbeat_min_gap_hours": {
+  "type": "int",
+  "default": 3,
+  "description": "两次主动之间至少隔几小时"
+ },
+ "heartbeat_busy_minutes": {
+  "type": "int",
+  "default": 30,
+  "description": "对方多少分钟内说过话就不另起话头"
+ },
+ "heartbeat_ignore_hours": {
+  "type": "int",
+  "default": 6,
+  "description": "主动找人后多少小时没回算“没回”"
+ },
+ "heartbeat_ignore_limit": {
+  "type": "int",
+  "default": 2,
+  "description": "连续几次没回就对这个人停一天"
+ },
+ "heartbeat_provider_id": {
+  "type": "string",
+  "default": "",
+  "description": "心跳判断用哪个模型提供商",
+  "hint": "留空 = 和补漏用同一个。"
+ },
+ "heartbeat_timeout_seconds": {
+  "type": "int",
+  "default": 40,
+  "description": "心跳判断的模型超时秒数"
  }
 }

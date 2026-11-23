@@ -24,9 +24,11 @@ from astrbot.api.star import Context, Star, register
 try:
     from . import logic as L
     from . import mind as M
+    from . import heartbeat as HB
 except ImportError:  # 测试里按文件加载
     import logic as L
     import mind as M
+    import heartbeat as HB
 
 PLUGIN_NAME = "astrbot_plugin_reach_out"
 THOUGHT_EXTRA = "reach_out_thought"
@@ -51,7 +53,9 @@ class ReachOutPlugin(Star):
         data_dir = self._data_dir()
         self.store = L.Store(os.path.join(data_dir, "state.json"), self.settings, logger=logger)
         self.mind = M.Mind(os.path.join(data_dir, "mind.json"), self.settings, logger=logger)
+        self.beat = HB.Beat(os.path.join(data_dir, "heartbeat.json"), self.settings, logger=logger)
         self._sweeper = None
+        self._heart = None
         self._tasks = set()
         self._names = {}  # "group:id"/"user:id" -> 显示名（从入站事件里顺手记下）
         self._sleep = asyncio.sleep
@@ -73,6 +77,8 @@ class ReachOutPlugin(Star):
             t.cancel()
         if self._sweeper:
             self._sweeper.cancel()
+        if self._heart:
+            self._heart.cancel()
 
     # ---------- 环境 ----------
     @staticmethod
@@ -223,9 +229,10 @@ class ReachOutPlugin(Star):
             logger.warning(f"[reach_out] 去{label}失败：{type(e).__name__}: {e}")
             await self.store.refund(token)
             await self.store.add_recent(key_from, place_from, "我", f"（想去{label}，但没去成）")
-            return
+            return False
         await self.store.commit(token)
         logger.info(f"[reach_out] 已在{label}唤起念头")
+        return True
 
     async def do_go_talk(self, event, where, target_id, intent):
         if self._is_thought(event):
@@ -539,6 +546,137 @@ class ReachOutPlugin(Star):
         logger.info(f"[reach_out] 补漏：看了 {len(entries)} 条近况，记下 {len(kept)} 件心事")
         return kept
 
+    # ---------- 心跳 ----------
+    def _ensure_heartbeat(self):
+        if self._heart is None and self.settings.heartbeat_enabled:
+            try:
+                self._heart = asyncio.get_running_loop().create_task(self._heart_loop())
+            except RuntimeError:
+                pass
+
+    async def _heart_loop(self):
+        while True:
+            try:
+                await self.heartbeat_tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"[reach_out] 心跳出错：{type(e).__name__}: {e}")
+            await asyncio.sleep(120)
+
+    def _heartbeat_targets(self, grants):
+        """[(对象键, 显示名, viewer)]。只有私聊；群不进心跳。"""
+        out = []
+        partners = self._partners()
+        if partners:
+            out.append((L.target_key(L.USER, partners[0]), "搭档", "partner"))
+        if self.settings.heartbeat_scope == "partner+granted":
+            for g in grants:
+                if g.get("kind") == L.USER and g.get("id") not in partners:
+                    key = L.target_key(L.USER, g["id"])
+                    out.append((key, g.get("note") or self._names.get(key) or g["id"], "user"))
+        return out
+
+    async def heartbeat_tick(self):
+        """跑一次心跳。返回 None（不在窗口或这个时段已跑过）、"不动" 或 "去了"。"""
+        now = self.beat.now()
+        so = HB.slot_of(now, HB.parse_window(self.settings.heartbeat_window),
+                        self.settings.heartbeat_interval_minutes)
+        if not so:
+            return None
+        day, slot = so
+        if not await self.beat.take_slot(day, slot):
+            return None
+        recent = await self.store.recent()
+        await self.beat.settle_ignores()
+        st = await self.beat.snapshot()
+
+        async def stay(reason, target=""):
+            await self.beat.record("不动", reason, target)
+            return "不动"
+
+        r = HB.brake_reason(st, now, self.settings, day)
+        if r:
+            return await stay(r)
+        platform = self.settings.platform_id or st.get("platform_id")
+        if not platform or not st.get("self_id"):
+            return await stay("还不知道往哪发（重启后还没人说过话）")
+        partners = self._partners()
+        items = await self.mind.items()
+        reasons, chosen = [], None
+        for key, label, viewer in self._heartbeat_targets(await self.store.list_grants()):
+            tr = HB.target_reason(st, key, now, recent, self.settings)
+            if tr:
+                reasons.append(f"{label}：{tr}")
+                continue
+            cands = HB.candidates(items, key, viewer, partners, now)
+            if not cands:
+                reasons.append(f"{label}：没有可说的事")
+                continue
+            chosen = (key, label, viewer, cands)
+            break
+        if not chosen:
+            return await stay("；".join(reasons) or "没有可以找的人")
+        key, label, viewer, cands = chosen
+        own = [e for e in recent if e.get("key") == key]
+        lines = L.render_recent(recent, "", viewer, partners, max_lines=8)
+        if viewer != "partner":
+            lines += L.render_recent(own, "", "partner", partners, max_lines=4)
+        pid = self.settings.heartbeat_provider_id or self.settings.sweep_provider_id
+        provider = self.context.get_provider_by_id(pid)
+        if provider is None:
+            return await stay(f"找不到模型提供商 {pid}", label)
+        prompt = HB.judge_prompt(now, label, st["count"] if st.get("day") == day else 0,
+                                 self.settings.heartbeat_daily_max, cands, lines)
+        try:
+            resp = await asyncio.wait_for(provider.text_chat(prompt=prompt, system_prompt=HB.JUDGE_SYSTEM),
+                                          timeout=self.settings.heartbeat_timeout_seconds)
+        except asyncio.TimeoutError:
+            return await stay("模型超时", label)
+        except Exception as e:
+            return await stay(f"模型出错 {type(e).__name__}", label)
+        d, err = HB.parse_judge(getattr(resp, "completion_text", ""), {c["id"] for c in cands},
+                                self.settings.max_text_len)
+        if err:
+            return await stay(err, label)
+        if not d["act"]:
+            return await stay(d["reason"], label)
+        tid = key.split(":", 1)[1]
+        if tid in partners:
+            token, err = await self.store.reserve_partner([tid], d["intent"])
+        else:
+            token, err = await self.store.reserve_contact(L.USER, tid, d["intent"])
+        if err:
+            return await stay(err, label)
+        try:
+            built, err = self.build_thought(platform, L.USER, tid, d["intent"], "一个人待着的时候想起来",
+                                            st["self_id"])
+        except Exception as e:
+            built, err = None, f"{type(e).__name__}: {str(e)[:80]}"
+        if err:
+            await self.store.refund(token)
+            return await stay(err, label)
+        if not await self._deliver(built, token, L.USER, tid, self._place_of(L.USER, tid), key,
+                                   self._place_of(L.USER, tid)):
+            return await stay("念头没送出去", label)
+        await self.beat.acted(day, key)
+        await self.mind.mark_hb_tried(d["item_id"])
+        await self.beat.record("去了", d["reason"] or d["intent"], label, d["item_id"])
+        logger.info(f"[reach_out] 心跳：去找{label}（{d['item_id']}）")
+        return "去了"
+
+    async def do_heartbeat_status(self):
+        st = await self.beat.snapshot()
+        now = self.beat.now()
+        day = HB.datetime.fromtimestamp(now, L.SHANGHAI).strftime("%Y-%m-%d")
+        count = st["count"] if st.get("day") == day else 0
+        head = (f"心跳：{'开' if self.settings.heartbeat_enabled else '关'}，范围 {self.settings.heartbeat_scope}，"
+                f"时段 {self.settings.heartbeat_window}，每 {self.settings.heartbeat_interval_minutes} 分钟；"
+                f"今天主动 {count}/{self.settings.heartbeat_daily_max} 次")
+        if st.get("last_act_ts"):
+            head += f"，上次 {L.md_hm(st['last_act_ts'])}"
+        return head + "\n" + HB.fmt_records(st.get("records") or [], now)
+
     # ---------- 近况 ----------
     async def on_outbound(self, info):
         """核心补丁的出站回调：只有 QQ 真的发送成功才会调用。"""
@@ -574,6 +712,11 @@ class ReachOutPlugin(Star):
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req) -> None:
         self._ensure_sweeper()
+        self._ensure_heartbeat()
+        try:
+            await self.beat.remember_platform(self._platform(event), event.get_self_id())
+        except Exception:
+            pass
         try:
             self._remember_names(event)
             key = self._key(event)
@@ -590,6 +733,7 @@ class ReachOutPlugin(Star):
                 text = L.strip_tag(event.message_str)
                 kind, tid = key.split(":", 1)
                 await self.store.add_recent(key, self._place_of(kind, tid), who, L.clip(text, 60), uid=sid)
+                await self.beat.saw(L.target_key(L.USER, sid))  # 心跳找过的人说话了（群里说也算）
         except Exception as e:  # 近况失败不影响对话
             logger.warning(f"[reach_out] 近况处理失败：{type(e).__name__}: {e}")
         try:
@@ -643,6 +787,12 @@ class ReachOutPlugin(Star):
     async def cmd_revoke(self, event: AstrMessageEvent):
         """[搭档] /撤销授权 私聊|群 <号码>"""
         yield event.plain_result(await self.do_revoke(event))
+
+    @permission_type(PermissionType.ADMIN)
+    @filter.command("心跳")
+    async def cmd_heartbeat(self, event: AstrMessageEvent):
+        """[搭档] 查看今天的心跳记录"""
+        yield event.plain_result(await self.do_heartbeat_status())
 
     @permission_type(PermissionType.ADMIN)
     @filter.command("心事")
