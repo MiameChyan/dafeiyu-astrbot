@@ -376,6 +376,23 @@ class HandlerTests(unittest.TestCase):
         self.assertFalse(ev.is_stopped())
         self.assertIsNone(self.plugin.state.take(ev.unified_msg_origin))
 
+    def test_reach_out_thought_bypasses_and_does_not_join_burst(self):
+        # reach_out 构造的念头：立即放行，不进对方正在进行的连发合并
+        async def go():
+            e1 = Ev("我先说一句")
+            t1 = self.handle(e1)
+            await self.advance(1)
+            thought = Ev("（这是你自己的念头）", raw={"post_type": "message", "reach_out_thought": True,
+                                                  "message": [{"type": "text", "data": {"text": "念头"}}]})
+            await self.plugin.on_message(thought)  # 不等待就返回
+            await self.advance(4.2)
+            await t1
+            return e1, thought
+        e1, thought = self.run_async(go())
+        self.assertFalse(thought.is_stopped())
+        self.assertEqual(thought.message_str, "（这是你自己的念头）")
+        self.assertEqual(e1.message_str, "我先说一句")  # 念头没被拼进去
+
     def test_group_messages_pass_through(self):
         async def go():
             ev = Ev("大肥鱼 在吗", umo="default:GroupMessage:1", private=False)

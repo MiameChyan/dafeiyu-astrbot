@@ -1,13 +1,15 @@
 {
-  "platform_id": {"type": "string", "default": "", "description": "发往哪个平台", "hint": "留空 = 用当前会话的平台（QQ 上就是 OneBot 适配器的 ID）。搭档和授权号码都按这个平台拼会话。"},
-  "max_text_len": {"type": "int", "default": 500, "description": "单条最多多少字"},
-  "partner_per_hour": {"type": "int", "default": 6, "description": "每小时最多私信搭档几次"},
-  "partner_per_day": {"type": "int", "default": 20, "description": "每天最多私信搭档几次"},
-  "contact_per_hour": {"type": "int", "default": 10, "description": "每小时最多给授权目标发几条（所有目标合计）"},
-  "contact_per_target_day": {"type": "int", "default": 10, "description": "每个授权目标每天最多几条"},
-  "dedupe_minutes": {"type": "int", "default": 10, "description": "多少分钟内同一目标的相同内容不重复发"},
-  "default_grant_days": {"type": "int", "default": 7, "description": "/授权 不写天数时的有效期", "hint": "0 = 永久。"},
-  "cc_partner": {"type": "bool", "default": true, "description": "给授权目标发消息后抄送搭档"},
-  "note_ttl_hours": {"type": "int", "default": 72, "description": "主动发出的话在对应会话里提示她多久"},
-  "notes_per_session": {"type": "int", "default": 5, "description": "每个会话最多提示最近几条"}
+  "platform_id": {"type": "string", "default": "", "description": "发往哪个平台", "hint": "留空 = 用当前会话的平台（QQ 上就是 OneBot 适配器的 ID）。"},
+  "max_text_len": {"type": "int", "default": 300, "description": "go_talk 意图最多多少字"},
+  "partner_per_hour": {"type": "int", "default": 6, "description": "每小时最多去搭档私聊几次"},
+  "partner_per_day": {"type": "int", "default": 20, "description": "每天最多去搭档私聊几次"},
+  "contact_per_hour": {"type": "int", "default": 10, "description": "每小时最多去授权目标几次（所有目标合计）"},
+  "contact_per_target_day": {"type": "int", "default": 10, "description": "每个授权目标每天最多去几次"},
+  "dedupe_minutes": {"type": "int", "default": 10, "description": "多少分钟内同一目标的相同意图不重复去"},
+  "default_grant_days": {"type": "int", "default": 7, "description": "授权不写天数时的有效期", "hint": "0 = 永久。"},
+  "thought_delay_seconds": {"type": "int", "default": 2, "description": "决定去说之后，过几秒在目标会话里唤起念头", "hint": "留时间让当前会话的回复先发出去。"},
+  "thought_sender_id": {"type": "string", "default": "0", "description": "群里念头消息的占位发送者号码", "hint": "不冒充任何群友。私聊念头的发送者只能是对方本人，由身份标记“[你自己的念头]”说明。"},
+  "recent_hours": {"type": "int", "default": 6, "description": "近况保留几小时"},
+  "recent_max": {"type": "int", "default": 30, "description": "近况最多保留几条"},
+  "recent_inject_max": {"type": "int", "default": 12, "description": "每次注入最多几行近况"}
 }

@@ -59,6 +59,8 @@ class ChatRhythmPlugin(Star):
             return
         if not hasattr(raw, "get") or raw.get("post_type") != "message":
             return
+        if raw.get("reach_out_thought"):
+            return  # reach_out 构造的念头：单独处理，不和对方的连发拼在一起
         text = (event.message_str or "").strip()
         comps = list(getattr(event.message_obj, "message", None) or [])
         if not text and not comps:
