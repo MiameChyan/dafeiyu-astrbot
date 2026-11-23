@@ -99,6 +99,19 @@ class Settings:
     recent_hours: int = 6
     recent_max: int = 30
     recent_inject_max: int = 12
+    mind_max_total: int = 20
+    mind_max_per_about: int = 5
+    mind_default_hours: int = 72
+    mind_max_hours: int = 336
+    mind_resurface_hours: int = 8
+    mind_max_surfaced: int = 3
+    mind_inject_max: int = 5
+    mind_text_len: int = 80
+    sweep_enabled: bool = True
+    sweep_hours: str = "10,14,18,22"
+    sweep_daily_max: int = 6
+    sweep_provider_id: str = "deepseek/deepseek-flash"
+    sweep_timeout_seconds: int = 40
 
     @classmethod
     def from_config(cls, cfg):
@@ -347,7 +360,7 @@ class Store:
             self._save()
 
     # ---------- 近况 ----------
-    async def add_recent(self, key, place, who, text, merge_seconds=0):
+    async def add_recent(self, key, place, who, text, merge_seconds=0, uid=None):
         """记一条近况。merge_seconds>0 时，同一会话同一说话人在这段时间内的连续几条合并成一条
         （她的回复会分成几个气泡分别发出）。"""
         text = str(text or "").strip()
@@ -362,7 +375,10 @@ class Store:
                 last["text"] = clip(f"{last.get('text', '')} {text}", 120)
                 last["ts"] = now
             else:
-                rec.append({"ts": now, "key": key, "place": place, "who": who, "text": clip(text, 120)})
+                e = {"ts": now, "key": key, "place": place, "who": who, "text": clip(text, 120)}
+                if uid:
+                    e["uid"] = str(uid)
+                rec.append(e)
             self._prune()
             self._save()
 

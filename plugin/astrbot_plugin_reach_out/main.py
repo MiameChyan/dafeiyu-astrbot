@@ -23,8 +23,10 @@ from astrbot.api.star import Context, Star, register
 
 try:
     from . import logic as L
+    from . import mind as M
 except ImportError:  # 测试里按文件加载
     import logic as L
+    import mind as M
 
 PLUGIN_NAME = "astrbot_plugin_reach_out"
 THOUGHT_EXTRA = "reach_out_thought"
@@ -46,7 +48,10 @@ class ReachOutPlugin(Star):
     def __init__(self, context: Context, config: dict | None = None):
         super().__init__(context)
         self.settings = L.Settings.from_config(config)
-        self.store = L.Store(os.path.join(self._data_dir(), "state.json"), self.settings, logger=logger)
+        data_dir = self._data_dir()
+        self.store = L.Store(os.path.join(data_dir, "state.json"), self.settings, logger=logger)
+        self.mind = M.Mind(os.path.join(data_dir, "mind.json"), self.settings, logger=logger)
+        self._sweeper = None
         self._tasks = set()
         self._names = {}  # "group:id"/"user:id" -> 显示名（从入站事件里顺手记下）
         self._sleep = asyncio.sleep
@@ -66,6 +71,8 @@ class ReachOutPlugin(Star):
         self._undo.clear()
         for t in list(self._tasks):
             t.cancel()
+        if self._sweeper:
+            self._sweeper.cancel()
 
     # ---------- 环境 ----------
     @staticmethod
@@ -357,6 +364,181 @@ class ReachOutPlugin(Star):
         """
         return await self.do_revoke_tool(event, kind, target_id)
 
+    # ---------- 心事 ----------
+    def _resolve_about(self, event, about):
+        """返回 (about 键, 显示名, 错误)。"""
+        a = str(about or "").strip().lower()
+        gid = self._gid(event)
+        if a in ("here", "这里", "对方", ""):
+            if self._is_thought(event) and gid:
+                return None, None, "念头里没有说话人，about 用 group 或 user:号码"
+            sid = str(event.get_sender_id())
+            if sid in self._partners():
+                return L.target_key(L.USER, sid), "搭档", None
+            name = L.clip(event.get_sender_name() or "", 16) or sid
+            return L.target_key(L.USER, sid), name, None
+        if a in ("group", "群", "这个群"):
+            if not gid:
+                return None, None, "现在不在群里，about 不能用 group"
+            return L.target_key(L.GROUP, gid), self._names.get(L.target_key(L.GROUP, gid)) or f"群 {gid}", None
+        if a in PARTNER_WORDS:
+            partners = self._partners()
+            if not partners:
+                return None, None, "还没有设置搭档"
+            return L.target_key(L.USER, partners[0]), "搭档", None
+        m = a.split(":", 1)
+        if len(m) == 2:
+            kind, tid = L.normalize_kind(m[0]), L.normalize_id(m[1])
+            if kind and tid:
+                key = L.target_key(kind, tid)
+                if kind == L.USER and tid in self._partners():
+                    return key, "搭档", None
+                return key, self._names.get(key) or tid, None
+        return None, None, "about 只能是 here、group、partner、user:号码 或 group:号码"
+
+    async def do_keep_in_mind(self, event, kind, about, text, due_in_hours=""):
+        k = M.normalize_kind(kind)
+        if not k:
+            return "没记下：kind 只能是 约定、牵挂 或 想分享。"
+        t, err = L.clean_text(text, self.settings.mind_text_len)
+        if err:
+            return f"没记下：{err}。"
+        key, name, err = self._resolve_about(event, about)
+        if err:
+            return f"没记下：{err}。"
+        hours, err = M.parse_hours(due_in_hours, self.settings.mind_max_hours)
+        if err:
+            return f"没记下：{err}。"
+        item, merged = await self.mind.keep(k, key, name, self._key(event), t, hours)
+        return f"{'已更新' if merged else '记在心上了'}：[{item['id']}] {k}·{name}：{t}。办完了或者不用再挂着时，用 let_go。"
+
+    async def do_let_go(self, event, item_id, how):
+        h = str(how or "").strip().lower()
+        if h not in ("done", "drop", "办了", "放下"):
+            return "how 只能是 done（办了）或 drop（不用再挂着）。"
+        item, err = await self.mind.let_go(str(item_id or "").strip(), "done" if h in ("done", "办了") else "drop")
+        if err:
+            return f"没改：{err}。"
+        return f"好，[{item['id']}] {item['text']} {'办完了' if item['status'] == 'done' else '放下了'}。"
+
+    def _mind_place(self, key):
+        if not key or ":" not in key:
+            return ""
+        kind, tid = key.split(":", 1)
+        return "在" + self._place_of(kind, tid) + ("里" if kind == L.GROUP else "时")
+
+    async def do_list_mind(self):
+        items = await self.mind.items(include_finished=True)
+        if not items:
+            return "她现在心里没挂着什么事。"
+        now = self.mind.now()
+        lines = []
+        for i in sorted(items, key=lambda x: (x.get("status") != M.ACTIVE, x.get("created_at", 0))):
+            state = "" if i["status"] == M.ACTIVE else f"〔{ {'done': '办了', 'dropped': '放下', 'expired': '过期'}[i['status']] }〕"
+            due = f"，到期 {L.md_hm(i['due_at'])}" if i.get("due_at") else ""
+            src = "，补漏" if i.get("source") == "sweep" else ""
+            lines.append(f"{state}[{i['id']}] {i['kind']}·{i.get('about_name') or i['about']}：{i['text']}"
+                         f"（{M.ago(now - float(i['created_at']))}{self._mind_place(i.get('origin'))}{due}，"
+                         f"提起 {i.get('surfaced', 0)} 次{src}）")
+        return "\n".join(lines)
+
+    @filter.llm_tool(name="keep_in_mind")
+    async def keep_in_mind(self, event: AstrMessageEvent, kind: str, about: str, text: str, due_in_hours: str):
+        """把一件事挂在心上：答应了别人的事（约定）、在意的对方的事（牵挂，比如考试、生病、搬家）、想告诉某人的事（想分享）。之后和这个人说话时你会想起来。精确到点的提醒用定时任务，不用这个。
+
+        Args:
+            kind(string): 约定、牵挂 或 想分享
+            about(string): 关于谁：here（正在跟你说话的这个人）、group（当前这个群）、partner（搭档）或 user:QQ号
+            text(string): 一句话说清楚是什么事，80 字以内
+            due_in_hours(string): 大概几小时后该想起，比如“明天”就是 24；不确定就留空
+        """
+        return await self.do_keep_in_mind(event, kind, about, text, due_in_hours)
+
+    @filter.llm_tool(name="let_go")
+    async def let_go(self, event: AstrMessageEvent, item_id: str, how: str):
+        """一件挂在心上的事了结了：问过了、办完了用 done；不用再惦记了用 drop。
+
+        Args:
+            item_id(string): 心事的编号，比如 m3f2a（在【你心里挂着的事】里能看到）
+            how(string): done 或 drop
+        """
+        return await self.do_let_go(event, item_id, how)
+
+    # ---------- 补漏 ----------
+    def _ensure_sweeper(self):
+        if self._sweeper is None and self.settings.sweep_enabled:
+            try:
+                self._sweeper = asyncio.get_running_loop().create_task(self._sweep_loop())
+            except RuntimeError:
+                pass
+
+    def _sweep_hours(self):
+        out = set()
+        for p in str(self.settings.sweep_hours or "").replace("，", ",").split(","):
+            p = p.strip()
+            if p.isdigit() and 0 <= int(p) <= 23:
+                out.add(int(p))
+        return out
+
+    async def _sweep_loop(self):
+        while True:
+            try:
+                await self.sweep_tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"[reach_out] 补漏出错：{type(e).__name__}: {e}")
+            await asyncio.sleep(300)  # 不用 self._sleep：那个是给念头投递的延迟用的
+
+    async def sweep_tick(self):
+        """到了补漏时段（北京时间整点所在的那一小时）且这个时段还没做过，就做一次。"""
+        from datetime import datetime
+
+        now = self.mind.now()
+        bj = datetime.fromtimestamp(now, L.SHANGHAI)
+        if bj.hour not in self._sweep_hours():
+            return False
+        if not await self.mind.sweep_slot(bj.strftime("%Y-%m-%d"), bj.hour):
+            return False
+        await self.run_sweep()
+        return True
+
+    async def run_sweep(self):
+        since = await self.mind.sweep_since()
+        now = self.mind.now()
+        entries = [e for e in await self.store.recent() if float(e.get("ts", 0)) > since]
+        await self.mind.sweep_done(now)
+        if not any(e.get("uid") for e in entries):
+            return []  # 这段时间没人跟她说过话
+        provider = self.context.get_provider_by_id(self.settings.sweep_provider_id)
+        if provider is None:
+            logger.warning(f"[reach_out] 补漏：找不到提供商 {self.settings.sweep_provider_id}")
+            return []
+        try:
+            resp = await asyncio.wait_for(
+                provider.text_chat(prompt=M.sweep_prompt(entries), system_prompt=M.SWEEP_SYSTEM),
+                timeout=self.settings.sweep_timeout_seconds)
+        except asyncio.TimeoutError:
+            logger.warning("[reach_out] 补漏：模型超时")
+            return []
+        except Exception as e:
+            logger.warning(f"[reach_out] 补漏：模型出错 {type(e).__name__}")
+            return []
+        cands = M.parse_sweep(getattr(resp, "completion_text", ""), entries, self.settings.mind_text_len)
+        names = {f"{L.USER}:{e['uid']}": e.get("who") for e in entries if e.get("uid")}
+        kept = []
+        for c in cands:
+            if await self.mind.has_similar(c["about"], c["text"]):
+                continue
+            kind, tid = c["about"].split(":", 1)
+            name = "搭档" if kind == L.USER and tid in self._partners() else (
+                names.get(c["about"]) or self._names.get(c["about"]) or tid)
+            item, _ = await self.mind.keep(c["kind"], c["about"], name, c["origin"], c["text"],
+                                           c["due_hours"], source="sweep")
+            kept.append(item)
+        logger.info(f"[reach_out] 补漏：看了 {len(entries)} 条近况，记下 {len(kept)} 件心事")
+        return kept
+
     # ---------- 近况 ----------
     async def on_outbound(self, info):
         """核心补丁的出站回调：只有 QQ 真的发送成功才会调用。"""
@@ -391,6 +573,7 @@ class ReachOutPlugin(Star):
 
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req) -> None:
+        self._ensure_sweeper()
         try:
             self._remember_names(event)
             key = self._key(event)
@@ -406,9 +589,21 @@ class ReachOutPlugin(Star):
                 who = "搭档" if sid in self._partners() else (L.clip(event.get_sender_name() or "", 16) or sid)
                 text = L.strip_tag(event.message_str)
                 kind, tid = key.split(":", 1)
-                await self.store.add_recent(key, self._place_of(kind, tid), who, L.clip(text, 60))
+                await self.store.add_recent(key, self._place_of(kind, tid), who, L.clip(text, 60), uid=sid)
         except Exception as e:  # 近况失败不影响对话
             logger.warning(f"[reach_out] 近况处理失败：{type(e).__name__}: {e}")
+        try:
+            key = self._key(event)
+            speaker = None if (self._is_thought(event) and self._gid(event)) else \
+                L.target_key(L.USER, str(event.get_sender_id()))
+            items = await self.mind.pick(key, speaker, self._viewer(event), self._partners(),
+                                         self.settings.mind_inject_max)
+            if items:
+                block = ("【你心里挂着的事】（你自己惦记着的；合适的时候自然提起，不用每次都提；"
+                         "办完了或不用再挂着就 let_go）\n" + "\n".join(M.render(items, self.mind.now(), self._mind_place)))
+                req.system_prompt = f"{req.system_prompt or ''}\n\n{block}\n"
+        except Exception as e:  # 心事失败不影响对话
+            logger.warning(f"[reach_out] 心事注入失败：{type(e).__name__}: {e}")
 
     # ---------- 搭档命令 ----------
     @staticmethod
@@ -448,6 +643,12 @@ class ReachOutPlugin(Star):
     async def cmd_revoke(self, event: AstrMessageEvent):
         """[搭档] /撤销授权 私聊|群 <号码>"""
         yield event.plain_result(await self.do_revoke(event))
+
+    @permission_type(PermissionType.ADMIN)
+    @filter.command("心事")
+    async def cmd_mind(self, event: AstrMessageEvent):
+        """[搭档] 查看她心里挂着的事（含 3 天内了结的）"""
+        yield event.plain_result(await self.do_list_mind())
 
     @permission_type(PermissionType.ADMIN)
     @filter.command("授权列表")
