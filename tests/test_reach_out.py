@@ -37,6 +37,8 @@ L = _load("reach_out_logic", os.path.join(PLUGIN, "logic.py"))
 sys.modules["logic"] = L
 MIND = _load("reach_out_mind", os.path.join(PLUGIN, "mind.py"))
 sys.modules["mind"] = MIND
+HB = _load("reach_out_heartbeat", os.path.join(PLUGIN, "heartbeat.py"))
+sys.modules["heartbeat"] = HB
 
 
 def _stub(name, **attrs):
@@ -266,9 +268,11 @@ class Base(unittest.TestCase):
         _Hooks.outbound.clear()
         cfg = dict(cfg or {})
         cfg.setdefault("sweep_enabled", False)  # 补漏后台任务在 TestSweep 里单独测
+        cfg.setdefault("heartbeat_enabled", False)  # 心跳后台任务在 test_reach_out_heartbeat 里单独测
         self.p = main.ReachOutPlugin(self.ctx, cfg)
         self.p.store.now = self.clock
         self.p.mind.now = self.clock
+        self.p.beat.now = self.clock
         self.p._sleep = _no_sleep
         return self.p
 
@@ -535,9 +539,9 @@ class TestGrant(Base):
         self.assertIn("本来就没有", run(self.p.do_revoke_tool(self.partner_event(), "群", GROUP_A)))
 
     def test_commands_admin_only_and_registered(self):
-        for name in ("cmd_grant", "cmd_revoke", "cmd_list", "cmd_mind"):
+        for name in ("cmd_grant", "cmd_revoke", "cmd_list", "cmd_mind", "cmd_heartbeat"):
             self.assertEqual(_Filter.perms.get(name), "admin", name)
-        self.assertEqual(set(_Filter.commands), {"授权", "撤销授权", "授权列表", "心事"})
+        self.assertEqual(set(_Filter.commands), {"授权", "撤销授权", "授权列表", "心事", "心跳"})
         for name in ("go_talk", "list_contacts", "grant_contact", "revoke_contact", "keep_in_mind", "let_go"):
             self.assertIn(name, _Filter.tools)
         for gone in ("message_partner", "message_contact"):

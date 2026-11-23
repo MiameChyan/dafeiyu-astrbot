@@ -112,6 +112,17 @@ class Settings:
     sweep_daily_max: int = 6
     sweep_provider_id: str = "deepseek/deepseek-flash"
     sweep_timeout_seconds: int = 40
+    heartbeat_enabled: bool = True
+    heartbeat_scope: str = "partner"
+    heartbeat_window: str = "09:30-23:30"
+    heartbeat_interval_minutes: int = 45
+    heartbeat_daily_max: int = 2
+    heartbeat_min_gap_hours: int = 3
+    heartbeat_busy_minutes: int = 30
+    heartbeat_ignore_hours: int = 6
+    heartbeat_ignore_limit: int = 2
+    heartbeat_provider_id: str = ""
+    heartbeat_timeout_seconds: int = 40
 
     @classmethod
     def from_config(cls, cfg):

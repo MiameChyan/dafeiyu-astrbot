@@ -196,6 +196,19 @@ class Mind:
                     return dict(i), None
             return None, f"没有 {item_id} 这件心事"
 
+    async def mark_hb_tried(self, item_id):
+        """心跳拿这件事去找过人：记一次提起，24 小时内心跳不再选它。"""
+        async with self._lock:
+            now = self.now()
+            for i in self.state["items"]:
+                if i.get("id") == item_id:
+                    i["hb_tried_at"] = now
+                    i["surfaced"] = int(i.get("surfaced", 0)) + 1
+                    i["last_surfaced_at"] = now
+                    self._save()
+                    return True
+            return False
+
     async def items(self, include_finished=False):
         async with self._lock:
             self._prune()
