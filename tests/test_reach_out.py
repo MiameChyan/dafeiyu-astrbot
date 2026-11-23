@@ -325,6 +325,18 @@ class TestGrantCommands(Base):
         self.assertIn("本来就没有", run(self.p.do_revoke(FakeEvent(msg="撤销授权 私聊 123456"))))
         self.assertIn("用法", run(self.p.do_revoke(FakeEvent(msg="撤销授权"))))
 
+    def test_grant_with_identity_tag_prefix(self):
+        # face_convert 会把 message_str 改成 "[搭档(QQ)] 授权 …"（线上 2026-11-23 实际踩到）
+        r = run(self.p.do_grant(FakeEvent(sender=PARTNER, admin=True,
+                                          msg=f"[搭档({PARTNER})] 授权 群 630569324 0天")))
+        self.assertIn("已授权：群 630569324", r)
+        self.assertIn("永久", r)
+        r = run(self.p.do_grant(FakeEvent(sender=PARTNER, admin=True, msg="/授权 群 630569325")))
+        self.assertIn("已授权：群 630569325", r)
+        r = run(self.p.do_revoke(FakeEvent(sender=PARTNER, admin=True,
+                                           msg=f"[搭档({PARTNER})] 撤销授权 群 630569324")))
+        self.assertIn("已撤销", r)
+
     def test_grant_partner_refused_and_bad_usage(self):
         self.assertIn("搭档", self.grant(f"私聊 {PARTNER}"))
         self.assertIn("用法", self.grant(""))

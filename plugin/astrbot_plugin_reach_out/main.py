@@ -230,12 +230,17 @@ class ReachOutPlugin(Star):
 
     # ---------- 搭档命令 ----------
     @staticmethod
-    def _args(event):
+    def _args(event, cmd):
+        """取命令名之后的参数。message_str 前面可能被 face_convert 加了身份标记
+        （如 "[搭档(QQ)] 授权 群 …"），所以按命令名定位，不按第一个词。"""
         parts = (event.message_str or "").split()
-        return parts[1:] if parts else []
+        for i, p in enumerate(parts):
+            if p.lstrip("/") == cmd:
+                return parts[i + 1:]
+        return []
 
     async def do_grant(self, event):
-        g, err = L.parse_grant_args(self._args(event), self.settings.default_grant_days)
+        g, err = L.parse_grant_args(self._args(event, "授权"), self.settings.default_grant_days)
         if err:
             return err
         if g["kind"] == L.USER and g["id"] in self._partners():
@@ -252,7 +257,7 @@ class ReachOutPlugin(Star):
         )
 
     async def do_revoke(self, event):
-        args = self._args(event)
+        args = self._args(event, "撤销授权")
         if len(args) < 2:
             return "用法：/撤销授权 私聊|群 <号码>"
         k, tid = L.normalize_kind(args[0]), L.normalize_id(args[1])
